@@ -32,38 +32,143 @@ SU_ALWAYS_INLINE void dispatch_sync_main_safe(dispatch_block_t block) {
 }
 
 @interface SUPlainInstaller (MMExtendedAttributes)
-// Removes the directory tree rooted at |root| from the file quarantine.
-// The quarantine was introduced on Mac OS X 10.5 and is described at:
-//
-//   http://developer.apple.com/releasenotes/Carbon/RN-LaunchServices/index.html
-//#apple_ref/doc/uid/TP40001369-DontLinkElementID_2
-//
-// If |root| is not a directory, then it alone is removed from the quarantine.
-// Symbolic links, including |root| if it is a symbolic link, will not be
-// traversed.
-//
-// Ordinarily, the quarantine is managed by calling LSSetItemAttribute
-// to set the kLSItemQuarantineProperties attribute to a dictionary specifying
-// the quarantine properties to be applied.  However, it does not appear to be
-// possible to remove an item from the quarantine directly through any public
-// Launch Services calls.  Instead, this method takes advantage of the fact
-// that the quarantine is implemented in part by setting an extended attribute,
-// "com.apple.quarantine", on affected files.  Removing this attribute is
-// sufficient to remove files from the quarantine.
 + (void)releaseFromQuarantine:(NSString*)root;
 @end
 
+static OSStatus su_AuthorizationExecuteWithPrivileges(AuthorizationRef authorization, const char *pathToTool, AuthorizationFlags flags, char *const *arguments)
+{
+	// flags are currently reserved
+	if (flags != 0)
+		return errAuthorizationInvalidFlags;
+
+	char **(^argVector)(const char *, const char *, const char *, char *const *) = ^char **(const char *bTrampoline, const char *bPath,
+																				  const char *bMboxFdText, char *const *bArguments){
+		int length = 0;
+		if (bArguments) {
+			for (char *const *p = bArguments; *p; p++)
+				length++;
+		}
+
+		const char **args = (const char **)malloc(sizeof(const char *) * (length + 4));
+		if (args) {
+			args[0] = bTrampoline;
+			args[1] = bPath;
+			args[2] = bMboxFdText;
+			if (bArguments)
+				for (int n = 0; bArguments[n]; n++)
+					args[n + 3] = bArguments[n];
+			args[length + 3] = NULL;
+			return (char **)args;
+		}
+		return NULL;
+	};
+
+	// externalize the authorization
+	AuthorizationExternalForm extForm;
+	OSStatus err;
+	if ((err = AuthorizationMakeExternalForm(authorization, &extForm)))
+		return err;
+
+	// create the mailbox file
+	FILE *mbox = tmpfile();
+	if (!mbox)
+		return errAuthorizationInternal;
+	if (fwrite(&extForm, sizeof(extForm), 1, mbox) != 1) {
+		fclose(mbox);
+		return errAuthorizationInternal;
+	}
+	fflush(mbox);
+
+	// make text representation of the temp-file descriptor
+	char mboxFdText[20];
+	snprintf(mboxFdText, sizeof(mboxFdText), "auth %d", fileno(mbox));
+
+	// make a notifier pipe
+	int notify[2];
+	if (pipe(notify)) {
+		fclose(mbox);
+		return errAuthorizationToolExecuteFailure;
+	}
+
+	// do the standard forking tango...
+	int delay = 1;
+	for (int n = 5;; n--, delay *= 2) {
+		switch (fork()) {
+			case -1: { // error
+				if (errno == EAGAIN) {
+					// potentially recoverable resource shortage
+					if (n > 0) {
+						sleep(delay);
+						continue;
+					}
+				}
+				close(notify[0]); close(notify[1]);
+				return errAuthorizationToolExecuteFailure;
+			}
+
+			default: {	// parent
+				// close foreign side of pipes
+				close(notify[1]);
+
+				// close mailbox file (child has it open now)
+				fclose(mbox);
+
+				// get status notification from child
+				OSStatus status;
+				ssize_t rc = read(notify[0], &status, sizeof(status));
+				status = ntohl(status);
+				switch (rc) {
+					default:				// weird result of read: post error
+						status = errAuthorizationToolEnvironmentError;
+						// fall through
+					case sizeof(status):	// read succeeded: child reported an error
+						close(notify[0]);
+						return status;
+					case 0:					// end of file: exec succeeded
+						close(notify[0]);
+						return noErr;
+				}
+			}
+
+			case 0: { // child
+				// close foreign side of pipes
+				close(notify[0]);
+
+				// fd 1 (stdout) holds the notify write end
+				dup2(notify[1], 1);
+				close(notify[1]);
+
+				// fd 0 (stdin) holds either the comm-link write-end or /dev/null
+				close(0);
+				open("/dev/null", O_RDWR);
+
+				// where is the trampoline?
+				const char *trampoline = "/usr/libexec/security_authtrampoline";
+				char **argv = argVector(trampoline, pathToTool, mboxFdText, arguments);
+				if (argv) {
+					execv(trampoline, argv);
+					free(argv);
+				}
+
+				// execute failed - tell the parent
+				OSStatus error = errAuthorizationToolExecuteFailure;
+				error = htonl(error);
+				write(1, &error, sizeof(error));
+				_exit(1);
+			}
+		}
+	}
+}
+
 // Authorization code based on generous contribution from Allan Odgaard. Thanks, Allan!
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wdeprecated-declarations" // this is terrible; will fix later probably
-static BOOL AuthorizationExecuteWithPrivilegesAndWait(AuthorizationRef authorization, const char* executablePath, AuthorizationFlags options, const char* const* arguments)
+static BOOL su_AuthorizationExecuteWithPrivilegesAndWait(AuthorizationRef authorization, const char* executablePath, AuthorizationFlags options, const char* const* arguments)
 {
 	// *** MUST BE SAFE TO CALL ON NON-MAIN THREAD!
 
 	sig_t oldSigChildHandler = signal(SIGCHLD, SIG_DFL);
 	BOOL returnValue = YES;
 
-	if (AuthorizationExecuteWithPrivileges(authorization, executablePath, options, (char* const*)arguments, NULL) == errAuthorizationSuccess)
+	if (su_AuthorizationExecuteWithPrivileges(authorization, executablePath, options, (char* const*)arguments) == errAuthorizationSuccess)
 	{
 		int status;
 		pid_t pid = wait(&status);
@@ -76,7 +181,6 @@ static BOOL AuthorizationExecuteWithPrivilegesAndWait(AuthorizationRef authoriza
 	signal(SIGCHLD, oldSigChildHandler);
 	return returnValue;
 }
-#pragma clang diagnostic pop
 
 @implementation SUPlainInstaller (Internals)
 
@@ -222,7 +326,7 @@ static BOOL AuthorizationExecuteWithPrivilegesAndWait(AuthorizationRef authoriza
 		if( res )	// Set permissions while it's still in source, so we have it with working and correct perms when it arrives at destination.
 		{
 			const char* coParams[] = { "-R", uidgid, srcPath, NULL };
-			res = AuthorizationExecuteWithPrivilegesAndWait( auth, "/usr/sbin/chown", kAuthorizationFlagDefaults, coParams );
+			res = su_AuthorizationExecuteWithPrivilegesAndWait( auth, "/usr/sbin/chown", kAuthorizationFlagDefaults, coParams );
 			if( !res )
 				SULog( @"chown -R %s %s failed.", uidgid, srcPath );
 		}
@@ -231,7 +335,7 @@ static BOOL AuthorizationExecuteWithPrivilegesAndWait(AuthorizationRef authoriza
 		if( res && haveDst )	// If there's something at our tmp path (previous failed update or whatever) delete that first.
 		{
 			const char*	rmParams[] = { "-rf", tmpPath, NULL };
-			res = AuthorizationExecuteWithPrivilegesAndWait( auth, "/bin/rm", kAuthorizationFlagDefaults, rmParams );
+			res = su_AuthorizationExecuteWithPrivilegesAndWait( auth, "/bin/rm", kAuthorizationFlagDefaults, rmParams );
 			if( !res )
 				SULog( @"rm failed" );
 		}
@@ -239,7 +343,7 @@ static BOOL AuthorizationExecuteWithPrivilegesAndWait(AuthorizationRef authoriza
 		if( res && haveDst )	// Move old exe to tmp path.
 		{
 			const char* mvParams[] = { "-f", dstPath, tmpPath, NULL };
-			res = AuthorizationExecuteWithPrivilegesAndWait( auth, "/bin/mv", kAuthorizationFlagDefaults, mvParams );
+			res = su_AuthorizationExecuteWithPrivilegesAndWait( auth, "/bin/mv", kAuthorizationFlagDefaults, mvParams );
 			if( !res )
 				SULog( @"mv 1 failed" );
 		}
@@ -247,7 +351,7 @@ static BOOL AuthorizationExecuteWithPrivilegesAndWait(AuthorizationRef authoriza
 		if( res )	// Move new exe to old exe's path.
 		{
 			const char* mvParams2[] = { "-f", srcPath, dstPath, NULL };
-			res = AuthorizationExecuteWithPrivilegesAndWait( auth, "/bin/mv", kAuthorizationFlagDefaults, mvParams2 );
+			res = su_AuthorizationExecuteWithPrivilegesAndWait( auth, "/bin/mv", kAuthorizationFlagDefaults, mvParams2 );
 			if( !res )
 				SULog( @"mv 2 failed" );
 		}
@@ -255,7 +359,7 @@ static BOOL AuthorizationExecuteWithPrivilegesAndWait(AuthorizationRef authoriza
 //		if( res && haveDst /*&& !foundTrash*/ )	// If we managed to put the old exe in the trash, leave it there for the user to delete or recover.
 //		{									// ...  Otherwise we better delete it, wouldn't want dozens of old versions lying around next to the new one.
 //			const char* rmParams2[] = { "-rf", tmpPath, NULL };
-//			res = AuthorizationExecuteWithPrivilegesAndWait( auth, "/bin/rm", kAuthorizationFlagDefaults, rmParams2 );
+//			res = su_AuthorizationExecuteWithPrivilegesAndWait( auth, "/bin/rm", kAuthorizationFlagDefaults, rmParams2 );
 //		}
 		
 		AuthorizationFree(auth, 0);
@@ -327,7 +431,7 @@ static BOOL AuthorizationExecuteWithPrivilegesAndWait(AuthorizationRef authoriza
 		if( res )	// Set permissions while it's still in source, so we have it with working and correct perms when it arrives at destination.
 		{
 			const char* coParams[] = { "-R", uidgid, srcPath, NULL };
-			res = AuthorizationExecuteWithPrivilegesAndWait( auth, "/usr/sbin/chown", kAuthorizationFlagDefaults, coParams );
+			res = su_AuthorizationExecuteWithPrivilegesAndWait( auth, "/usr/sbin/chown", kAuthorizationFlagDefaults, coParams );
 			if( !res )
 				SULog(@"Can't set permissions");
 		}
@@ -336,7 +440,7 @@ static BOOL AuthorizationExecuteWithPrivilegesAndWait(AuthorizationRef authoriza
 		if( res && haveDst )	// If there's something at our tmp path (previous failed update or whatever) delete that first.
 		{
 			const char*	rmParams[] = { "-rf", dstPath, NULL };
-			res = AuthorizationExecuteWithPrivilegesAndWait( auth, "/bin/rm", kAuthorizationFlagDefaults, rmParams );
+			res = su_AuthorizationExecuteWithPrivilegesAndWait( auth, "/bin/rm", kAuthorizationFlagDefaults, rmParams );
 			if( !res )
 				SULog(@"Can't remove destination file");
 		}
@@ -344,7 +448,7 @@ static BOOL AuthorizationExecuteWithPrivilegesAndWait(AuthorizationRef authoriza
 		if( res )	// Move!.
 		{
 			const char* mvParams[] = { "-f", srcPath, dstPath, NULL };
-			res = AuthorizationExecuteWithPrivilegesAndWait( auth, "/bin/mv", kAuthorizationFlagDefaults, mvParams );
+			res = su_AuthorizationExecuteWithPrivilegesAndWait( auth, "/bin/mv", kAuthorizationFlagDefaults, mvParams );
 			if( !res )
 				SULog(@"Can't move source file");
 		}
@@ -392,7 +496,7 @@ static BOOL AuthorizationExecuteWithPrivilegesAndWait(AuthorizationRef authoriza
 		if( res )	// If there's something at our tmp path (previous failed update or whatever) delete that first.
 		{
 			const char*	rmParams[] = { "-rf", srcPath, NULL };
-			res = AuthorizationExecuteWithPrivilegesAndWait( auth, "/bin/rm", kAuthorizationFlagDefaults, rmParams );
+			res = su_AuthorizationExecuteWithPrivilegesAndWait( auth, "/bin/rm", kAuthorizationFlagDefaults, rmParams );
 			if( !res )
 				SULog(@"Can't remove destination file");
 		}
@@ -557,6 +661,24 @@ static BOOL AuthorizationExecuteWithPrivilegesAndWait(AuthorizationRef authoriza
 	return removexattr(path, name, options);
 }
 
+/**
+ Removes the directory tree rooted at |root| from the file quarantine.
+ The quarantine was introduced on Mac OS X 10.5 and is described at:
+   http://developer.apple.com/releasenotes/Carbon/RN-LaunchServices/index.html#apple_ref/doc/uid/TP40001369-DontLinkElementID_2
+
+ If |root| is not a directory, then it alone is removed from the quarantine.
+ Symbolic links, including |root| if it is a symbolic link, will not be
+ traversed.
+
+ Ordinarily, the quarantine is managed by calling LSSetItemAttribute
+ to set the kLSItemQuarantineProperties attribute to a dictionary specifying
+ the quarantine properties to be applied.  However, it does not appear to be
+ possible to remove an item from the quarantine directly through any public
+ Launch Services calls.  Instead, this method takes advantage of the fact
+ that the quarantine is implemented in part by setting an extended attribute,
+ "com.apple.quarantine", on affected files.  Removing this attribute is
+ sufficient to remove files from the quarantine.
+ */
 + (void)releaseFromQuarantine:(NSString*)root
 {
 	// *** MUST BE SAFE TO CALL ON NON-MAIN THREAD!
