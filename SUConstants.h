@@ -30,6 +30,38 @@
 #define TRY_TO_APPEND_VERSION_NUMBER				1
 
 // -----------------------------------------------------------------------------
+//	Compiler API macros
+// -----------------------------------------------------------------------------
+
+#ifndef SU_DESIGNATED_INITIALIZER
+# if __has_attribute(objc_designated_initializer)
+#  define SU_DESIGNATED_INITIALIZER __attribute__((objc_designated_initializer))
+# else
+#  define SU_DESIGNATED_INITIALIZER
+# endif
+#endif
+
+#ifndef SU_REQUIRES_SUPER
+# if __has_attribute(objc_requires_super)
+#  define SU_REQUIRES_SUPER __attribute__((objc_requires_super))
+# else
+#  define SU_REQUIRES_SUPER
+# endif
+#endif
+
+#ifndef SU_ALWAYS_INLINE
+# if __has_attribute(always_inline) || defined(__GNUC__)
+#  define SU_ALWAYS_INLINE static __inline__ __attribute__((always_inline))
+# elif defined(__MWERKS__) || defined(__cplusplus)
+#  define SU_ALWAYS_INLINE static inline
+# elif defined(_MSC_VER)
+#  define SU_ALWAYS_INLINE static __inline
+# elif TARGET_OS_WIN32
+#  define SU_ALWAYS_INLINE static __inline__
+# endif
+#endif
+
+// -----------------------------------------------------------------------------
 //	Notifications:
 // -----------------------------------------------------------------------------
 
