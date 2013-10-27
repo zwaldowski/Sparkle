@@ -84,9 +84,9 @@
 
 - (void) watchdog:(NSTimer *)aTimer
 {
-	ProcessSerialNumber psn;
-	if (GetProcessForPID(parentprocessid, &psn) == procNotFound)
+	if (![NSRunningApplication runningApplicationWithProcessIdentifier:parentprocessid]) {
 		[self parentHasQuit];
+}
 }
 
 - (void)showAppIconInDock:(NSTimer *)aTimer;
