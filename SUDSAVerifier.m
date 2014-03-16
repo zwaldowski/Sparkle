@@ -14,11 +14,11 @@
 /* CDSA Specific */
 static CSSM_CSP_HANDLE cdsaInit( void );
 static void cdsaRelease( CSSM_CSP_HANDLE cspHandle );
-static CSSM_KEY_PTR cdsaCreateKey( CFDataRef rawKey );
+static CSSM_KEY_PTR cdsaCreateKey(NSData *rawKey);
 static void cdsaReleaseKey( CSSM_KEY_PTR key );
 static BOOL cdsaVerifyKey( CSSM_CSP_HANDLE cspHandle, const CSSM_KEY_PTR key );
-static BOOL cdsaVerifySignature( CSSM_CSP_HANDLE cspHandle, const CSSM_KEY_PTR key, const CFDataRef msg, const CFDataRef signature );
-static CFDataRef cdsaCreateSHA1Digest( CSSM_CSP_HANDLE cspHandle, const CFDataRef bytes );
+static BOOL cdsaVerifySignature( CSSM_CSP_HANDLE cspHandle, const CSSM_KEY_PTR key, NSData *msg, NSData *signature );
+static NSData *cdsaCreateSHA1Digest( CSSM_CSP_HANDLE cspHandle, NSData *bytes );
 
 /* Helper Functions */
 static NSData *b64decode( NSString *str );
@@ -30,17 +30,30 @@ static NSData *rawKeyData( NSString *str );
 + (BOOL)validatePath:(NSString *)path withEncodedDSASignature:(NSString *)encodedSignature withPublicDSAKey:(NSString *)pkeyString
 {
 	if ( !encodedSignature || !pkeyString || !path ) return NO;
-	BOOL result = NO;
-	NSData *pathData = nil, *sigData = nil;
-	CFDataRef hashData = NULL;
-	CSSM_KEY_PTR pubKey = cdsaCreateKey((__bridge CFDataRef)rawKeyData(pkeyString)); // Create the DSA key
-	CSSM_CSP_HANDLE cspHandle = CSSM_INVALID_HANDLE;
-	
+
+	__block CSSM_KEY_PTR pubKey = cdsaCreateKey(rawKeyData(pkeyString)); // Create the DSA key
+	__block CSSM_CSP_HANDLE cspHandle = CSSM_INVALID_HANDLE;
+
+	BOOL(^cleanup)(void) = ^{
+		if (pubKey) {
+			cdsaReleaseKey( pubKey );
+			pubKey = NULL;
+		}
+
+		if (cspHandle) {
+			cdsaRelease(cspHandle);
+			cspHandle = NULL;
+		}
+
+		return NO;
+	};
+
+	NSData *pathData, *sigData, *hashData;
 	if ( !pubKey ) return NO;
-	if ( (cspHandle = cdsaInit()) == CSSM_INVALID_HANDLE ) goto validate_end; // Init CDSA
-	if ( !cdsaVerifyKey(cspHandle, pubKey) ) goto validate_end; // Verify the key is valid
-	if ( (pathData = [NSData dataWithContentsOfFile:path]) == nil ) goto validate_end; // File data
-	if ( (hashData = cdsaCreateSHA1Digest(cspHandle, (__bridge CFDataRef)pathData)) == NULL ) goto validate_end; // Hash
+	if ( (cspHandle = cdsaInit()) == CSSM_INVALID_HANDLE ) { return cleanup(); }; // Init CDSA
+	if ( !cdsaVerifyKey(cspHandle, pubKey) ) { return cleanup(); }; // Verify the key is valid
+	if ( (pathData = [NSData dataWithContentsOfFile:path]) == nil ) { return cleanup(); }; // File data
+	if ( (hashData = cdsaCreateSHA1Digest(cspHandle, pathData)) == nil) { return cleanup(); }; // Hash
 	
 	// Remove any line feeds from end of signature
 	// (Not likely needed, but the verify _can_ fail if there is, so...)
@@ -50,16 +63,11 @@ static NSData *rawKeyData( NSString *str );
 			[sig deleteCharactersInRange:NSMakeRange([sig length] - 1, 1)];
 		encodedSignature = sig;
 	}
-	if ( (sigData = b64decode(encodedSignature)) == nil ) goto validate_end; // Decode signature
+	if ( (sigData = b64decode(encodedSignature)) == nil ) { return cleanup(); }; // Decode signature
 	
 	// Verify the signature on the file
-	result = cdsaVerifySignature( cspHandle, pubKey, hashData, (__bridge CFDataRef)sigData );
-
-validate_end:
-	cdsaReleaseKey( pubKey );
-	cdsaRelease( cspHandle );
-	if ( hashData ) CFRelease( hashData );
-	
+	BOOL result = cdsaVerifySignature( cspHandle, pubKey, hashData, sigData );
+	cleanup();
 	return result;
 }
 
@@ -161,9 +169,7 @@ static NSData *rawKeyData( NSString *key )
 #pragma mark -
 
 /* Helper Functions */
-static CSSM_DATA_PTR su_createData( CFDataRef bytes );
-static void su_freeData( CSSM_DATA_PTR data, Boolean freeData );
-static Boolean su_copyBytesToData( CSSM_DATA_PTR data, CSSM_SIZE size, const uint8 *bytes );
+SU_ALWAYS_INLINE CSSM_DATA su_createData(NSData * bytes);
 
 /* Memory functions */
 static void *su_malloc( CSSM_SIZE size, void *ref );
@@ -175,6 +181,7 @@ static void *su_calloc( uint32 num, CSSM_SIZE size, void *ref );
 static CSSM_VERSION vers = { 2, 0 };
 static const CSSM_GUID su_guid = { 'S', 'p', 'a', { 'r', 'k', 'l', 'e', 0, 0, 0, 0 } };
 static CSSM_BOOL cssmInited = CSSM_FALSE;
+static const CSSM_DATA CSSM_DATA_EMPTY = { .Data = NULL, .Length = 0};
 
 static CSSM_API_MEMORY_FUNCS SU_MemFuncs = {
 	su_malloc,
@@ -211,23 +218,16 @@ static void cdsaRelease( CSSM_CSP_HANDLE cspHandle )
 	CSSM_ModuleUnload( &gGuidAppleCSP, NULL, NULL );
 }
 
-static CSSM_KEY_PTR cdsaCreateKey( CFDataRef rawKey )
+static CSSM_KEY_PTR cdsaCreateKey(NSData *rawKey)
 {
+	if ( !rawKey || !rawKey.length) return NULL;
+	
 	CSSM_KEY_PTR retval = NULL;
-	
-	if ( !rawKey || (CFDataGetLength(rawKey) == 0) ) return NULL;
-	
+
 	if ( (retval = su_malloc(sizeof(CSSM_KEY), NULL)) == NULL ) return NULL;
-	
-	if ( !su_copyBytesToData(&(retval->KeyData), CFDataGetLength(rawKey), CFDataGetBytePtr(rawKey)) ) {
-		su_free( retval, NULL );
-		return NULL;
-	}
-	
+
 	CSSM_KEYHEADER_PTR hdr = &(retval->KeyHeader);
-	
-	memset( hdr, 0, sizeof(CSSM_KEYHEADER) );
-	
+	bzero(hdr, sizeof(CSSM_KEYHEADER));
 	hdr->HeaderVersion = CSSM_KEYHEADER_VERSION;
 	hdr->CspId = su_guid;
 	hdr->BlobType = CSSM_KEYBLOB_RAW;
@@ -236,6 +236,8 @@ static CSSM_KEY_PTR cdsaCreateKey( CFDataRef rawKey )
 	hdr->KeyClass = CSSM_KEYCLASS_PUBLIC_KEY;
 	hdr->KeyAttr = CSSM_KEYATTR_EXTRACTABLE;
 	hdr->KeyUsage = CSSM_KEYUSE_ANY;
+
+	retval->KeyData = su_createData(rawKey);
 	
 	return retval;
 }
@@ -262,43 +264,49 @@ BOOL cdsaVerifyKey( CSSM_CSP_HANDLE cspHandle, CSSM_KEY_PTR key )
 	return YES;
 }
 
-static BOOL cdsaVerifySignature( CSSM_CSP_HANDLE cspHandle, const CSSM_KEY_PTR key, const CFDataRef msg, const CFDataRef signature )
+static BOOL cdsaVerifySignature( CSSM_CSP_HANDLE cspHandle, const CSSM_KEY_PTR key, NSData *msg, NSData *signature )
 {
 	CSSM_CC_HANDLE ccHandle = CSSM_INVALID_HANDLE;
-	CSSM_DATA_PTR plain = su_createData( msg ), cipher = su_createData( signature );
-	BOOL retval = NO;
+	CSSM_DATA plain = su_createData(msg), cipher = su_createData(signature);
+
+	BOOL(^cleanup)(void) = ^{
+		if ( ccHandle ) CSSM_DeleteContext( ccHandle );
+		return NO;
+	};
 	
-	if ( !plain || !cipher || (CSSM_CSP_CreateSignatureContext(cspHandle, CSSM_ALGID_SHA1WithDSA, NULL, key, &ccHandle) != CSSM_OK) )
-		goto verify_end;
+	if (CSSM_CSP_CreateSignatureContext(cspHandle, CSSM_ALGID_SHA1WithDSA, NULL, key, &ccHandle) != CSSM_OK) {
+		return cleanup();
+	}
 	
-	retval = ( CSSM_VerifyData(ccHandle, plain, 1, CSSM_ALGID_NONE, cipher) == CSSM_OK );
-	
-verify_end:
-	su_freeData( plain, true );
-	su_freeData( cipher, true );
-	if ( ccHandle ) CSSM_DeleteContext( ccHandle );
-	
-	return retval;
+	BOOL ret = ( CSSM_VerifyData(ccHandle, &plain, 1, CSSM_ALGID_NONE, &cipher) == CSSM_OK );
+	cleanup();
+	return ret;
 }
 
-static CFDataRef cdsaCreateSHA1Digest( CSSM_CSP_HANDLE cspHandle, const CFDataRef bytes )
+static NSData *cdsaCreateSHA1Digest( CSSM_CSP_HANDLE cspHandle, NSData *bytes)
 {
-	CSSM_CC_HANDLE ccHandle = CSSM_INVALID_HANDLE;
-	CSSM_DATA_PTR data = su_createData( bytes ), dgst = su_createData( NULL );
-	CFDataRef retval = NULL;
-	
-	if ( !data || !dgst || (CSSM_CSP_CreateDigestContext(cspHandle, CSSM_ALGID_SHA1, &ccHandle) != CSSM_OK) )
-		goto digest_end;
-	
-	if ( CSSM_DigestData(ccHandle, data, 1, dgst) == CSSM_OK )
-		retval = CFDataCreate( kCFAllocatorDefault, (const UInt8 *)dgst->Data, (CFIndex)dgst->Length );
+	if (!bytes) return nil;
 
-digest_end:
-	su_freeData( data, true );
-	su_freeData( dgst, true );
-	if ( ccHandle ) CSSM_DeleteContext( ccHandle );
+	CSSM_CC_HANDLE ccHandle = CSSM_INVALID_HANDLE;
+	CSSM_DATA data = su_createData(bytes), dgst = CSSM_DATA_EMPTY;
+
+	id(^cleanup)(void) = ^id{
+		if (ccHandle) CSSM_DeleteContext( ccHandle );
+		return nil;
+	};
 	
-	return retval;
+	if ((CSSM_CSP_CreateDigestContext(cspHandle, CSSM_ALGID_SHA1, &ccHandle) != CSSM_OK)) {
+		return cleanup();
+	}
+
+	NSData *ret = nil;
+	if (CSSM_DigestData(ccHandle, &data, 1, &dgst) == CSSM_OK ) {
+		ret = [NSData dataWithBytesNoCopy:dgst.Data length:dgst.Length freeWhenDone:YES];
+	} else {
+		if (dgst.Data) free(dgst.Data);
+	}
+	cleanup();
+	return ret;
 }
 
 /* Memory Functions */
@@ -323,33 +331,11 @@ static void *su_calloc( uint32 num, CSSM_SIZE size, void *ref )
 }
 
 /* Helper Functions */
-static CSSM_DATA_PTR su_createData( CFDataRef bytes )
+SU_ALWAYS_INLINE CSSM_DATA su_createData(NSData * bytes)
 {
-	CSSM_DATA_PTR data = su_malloc( sizeof(CSSM_DATA), NULL );
-	if ( !data ) return NULL;
-	data->Data = NULL;
-	data->Length = 0;
-	if ( bytes ) su_copyBytesToData( data, CFDataGetLength(bytes), CFDataGetBytePtr(bytes) );
-	return data;
-}
-
-static void su_freeData( CSSM_DATA_PTR data, Boolean freeData )
-{
-	if ( data ) {
-		if ( freeData && data->Data ) su_free( data->Data, NULL );
-		su_free( data, NULL );
-	}
-}
-
-static Boolean su_copyBytesToData( CSSM_DATA_PTR data, CSSM_SIZE size, const uint8 *bytes )
-{
-	Boolean retval = false;
-	if ( size && bytes ) {
-		if ( (data->Data = su_malloc(size, NULL)) ) {
-			memcpy( data->Data, bytes, size );
-			data->Length = size;
-			retval = true;
-		}
-	}
-	return retval;	
+	if (!bytes) return CSSM_DATA_EMPTY;
+	return (CSSM_DATA){
+		.Data = (UInt8 *)bytes.bytes,
+		.Length = bytes.length
+	};
 }

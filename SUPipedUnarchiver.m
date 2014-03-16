@@ -60,28 +60,50 @@
 - (void)extractArchivePipingDataToCommand:(NSString *)command
 {
 	// *** GETS CALLED ON NON-MAIN THREAD!!!
-	
-
 	@autoreleasepool {
-		FILE *fp = NULL, *cmdFP = NULL;
-		char *oldDestinationString = NULL;
+		__block FILE *fp = NULL, *cmdFP = NULL;
+		__block char *oldDestinationString = NULL;
+
+		void(^cleanup)(void) = ^{
+			if (fp) {
+				fclose(fp);
+				fp = NULL;
+			}
+
+			if (cmdFP) {
+				pclose(cmdFP);
+				cmdFP = NULL;
+			}
+
+			if (oldDestinationString) {
+				setenv("DESTINATION", oldDestinationString, 1);
+			} else {
+				unsetenv("DESTINATION");
+			}
+		};
+
+		void (^reportError)(void) = ^{
+			[self performSelectorOnMainThread:@selector(notifyDelegateOfFailure) withObject:nil waitUntilDone:NO];
+
+			cleanup();
+		};
 
 		SULog(@"Extracting %@ using '%@'",archivePath,command);
-    
+
 		// Get the file size.
 		NSNumber *fs = [[[NSFileManager defaultManager] attributesOfItemAtPath:archivePath error:nil] objectForKey:NSFileSize];
-		if (fs == nil) goto reportError;
+		if (!fs) return reportError();
 
 		// Thank you, Allan Odgaard!
 		// (who wrote the following extraction alg.)
 		fp = fopen([archivePath fileSystemRepresentation], "r");
-		if (!fp) goto reportError;
+		if (!fp) return reportError();
 
 		oldDestinationString = getenv("DESTINATION");
 		setenv("DESTINATION", [[archivePath stringByDeletingLastPathComponent] fileSystemRepresentation], 1);
 		cmdFP = popen([command fileSystemRepresentation], "w");
 		size_t written;
-		if (!cmdFP) goto reportError;
+		if (!cmdFP) return reportError();
 
 		char buf[32*1024];
 		size_t len;
@@ -91,30 +113,20 @@
 			if( written < len )
 			{
 				pclose(cmdFP);
-				goto reportError;
+				return reportError();
 			}
 
 			[self performSelectorOnMainThread:@selector(notifyDelegateOfExtractedLength:) withObject:[NSNumber numberWithUnsignedLong:len] waitUntilDone:NO];
 		}
 		pclose(cmdFP);
 
-		if( ferror( fp ) )
-			goto reportError;
+		if( ferror( fp ) ) {
+			return reportError();
+		}
 
 		[self performSelectorOnMainThread:@selector(notifyDelegateOfSuccess) withObject:nil waitUntilDone:NO];
-		goto finally;
-
-reportError:
-		[self performSelectorOnMainThread:@selector(notifyDelegateOfFailure) withObject:nil waitUntilDone:NO];
-
-finally:
-		if (fp)
-			fclose(fp);
-
-		if (oldDestinationString)
-			setenv("DESTINATION", oldDestinationString, 1);
-		else
-			unsetenv("DESTINATION");
+		
+		cleanup();
 	}
 }
 
