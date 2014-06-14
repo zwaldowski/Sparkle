@@ -13,32 +13,47 @@
 
 @implementation SUPipedUnarchiver
 
-+ (SEL)selectorConformingToTypeOfPath:(NSString *)path
++ (NSString *)commandConformingToTypeOfPath:(NSString *)path
 {
-	static NSDictionary *typeSelectorDictionary;
-	if (!typeSelectorDictionary)
-		typeSelectorDictionary = [NSDictionary dictionaryWithObjectsAndKeys:@"extractZIP", @".zip", @"extractTAR", @".tar",
-								   @"extractTGZ", @".tar.gz", @"extractTGZ", @".tgz",
-								   @"extractTBZ", @".tar.bz2", @"extractTBZ", @".tbz", nil];
+	NSString *extractZIP = @"ditto -x -k - \"$DESTINATION\"";
+	NSString *extractTAR = @"tar -xC \"$DESTINATION\"";
+	NSString *extractTBZ = @"tar -jxC \"$DESTINATION\"";
+	NSString *extractTGZ = @"tar -zxC \"$DESTINATION\"";
+	
+	NSDictionary *typeSelectorDictionary = @{
+		@".zip": extractZIP,
+		@".tar": extractTAR,
+		@".tar.gz": extractTGZ,
+		@".tgz": extractTGZ,
+		@".tar.bz2": extractTBZ,
+		@".tbz": extractTBZ
+    };
 
 	NSString *lastPathComponent = [path lastPathComponent];
-	for (id currentType in typeSelectorDictionary)
-	{
-		if ([currentType length] > [lastPathComponent length]) continue;
-		if ([[lastPathComponent substringFromIndex:[lastPathComponent length] - [currentType length]] isEqualToString:currentType])
-			return NSSelectorFromString([typeSelectorDictionary objectForKey:currentType]);
-	}
-	return NULL;
+	__block NSString *ret = NULL;
+	[typeSelectorDictionary enumerateKeysAndObjectsUsingBlock:^(NSString *currentType, NSString *obj, BOOL *stop) {
+		if ([currentType length] > [lastPathComponent length]) return;
+		if ([[lastPathComponent substringFromIndex:[lastPathComponent length] - [currentType length]] isEqualToString:currentType]) {
+			ret = obj;
+			*stop = YES;
+		}
+	}];
+	return ret;
 }
 
 - (void)start
 {
-	[NSThread detachNewThreadSelector:[[self class] selectorConformingToTypeOfPath:archivePath] toTarget:self withObject:nil];
+	NSString *command = [[self class] commandConformingToTypeOfPath:archivePath];
+	if (!command) return;
+
+	dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+		[self extractArchivePipingDataToCommand:command];
+	});
 }
 
 + (BOOL)canUnarchivePath:(NSString *)path
 {
-	return ([self selectorConformingToTypeOfPath:path] != nil);
+	return ([self commandConformingToTypeOfPath:path] != nil);
 }
 
 // This method abstracts the types that use a command line tool piping data from stdin.
@@ -101,34 +116,6 @@ finally:
 		else
 			unsetenv("DESTINATION");
 	}
-}
-
-- (void)extractTAR
-{
-	// *** GETS CALLED ON NON-MAIN THREAD!!!
-	
-	return [self extractArchivePipingDataToCommand:@"tar -xC \"$DESTINATION\""];
-}
-
-- (void)extractTGZ
-{
-	// *** GETS CALLED ON NON-MAIN THREAD!!!
-	
-	return [self extractArchivePipingDataToCommand:@"tar -zxC \"$DESTINATION\""];
-}
-
-- (void)extractTBZ
-{
-	// *** GETS CALLED ON NON-MAIN THREAD!!!
-	
-	return [self extractArchivePipingDataToCommand:@"tar -jxC \"$DESTINATION\""];
-}
-
-- (void)extractZIP
-{
-	// *** GETS CALLED ON NON-MAIN THREAD!!!
-	
-	return [self extractArchivePipingDataToCommand:@"ditto -x -k - \"$DESTINATION\""];
 }
 
 + (void)load

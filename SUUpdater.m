@@ -289,8 +289,10 @@ static void *SUUpdaterDefaultsObservationContext = &SUUpdaterDefaultsObservation
 	//	Wouldn't want to annoy users on dial-up by establishing a connection every
 	//	hour or so:
 	SUUpdateDriver *	theUpdateDriver = [[([self automaticallyDownloadsUpdates] ? [SUAutomaticUpdateDriver class] : [SUScheduledUpdateDriver class]) alloc] initWithUpdater:self];
-	
-	[NSThread detachNewThreadSelector: @selector(checkForUpdatesInBgReachabilityCheckWithDriver:) toTarget: self withObject: theUpdateDriver];
+
+	dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+		[self checkForUpdatesInBgReachabilityCheckWithDriver:theUpdateDriver];
+	});
 }
 
 

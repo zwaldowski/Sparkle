@@ -54,10 +54,16 @@ NSString *SUPackageInstallerInstallationPathKey = @"SUPackageInstallerInstallati
 	else 
 	{
 		NSDictionary *info = [NSDictionary dictionaryWithObjectsAndKeys:command, SUPackageInstallerCommandKey, args, SUPackageInstallerArgumentsKey, host, SUPackageInstallerHostKey, delegate, SUPackageInstallerDelegateKey, installationPath, SUPackageInstallerInstallationPathKey, nil];
-		if (synchronously)
+
+		void(^block)(void) = ^{
 			[self performInstallationWithInfo:info];
-		else
-			[NSThread detachNewThreadSelector:@selector(performInstallationWithInfo:) toTarget:self withObject:info];
+		};
+
+		if (synchronously) {
+			block();
+		} else {
+			dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), block);
+		}
 	}
 }
 

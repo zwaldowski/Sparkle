@@ -74,10 +74,16 @@ static NSString * const SUInstallerInstallationPathKey = @"SUInstallerInstallati
     NSString *targetPath = [host installationPath];
     NSString *tempName = [self temporaryNameForPath:targetPath];
 	NSDictionary *info = [NSDictionary dictionaryWithObjectsAndKeys:path, SUInstallerPathKey, targetPath, SUInstallerTargetPathKey, tempName, SUInstallerTempNameKey, host, SUInstallerHostKey, delegate, SUInstallerDelegateKey, installationPath, SUInstallerInstallationPathKey, nil];
-	if (synchronously)
+
+	void(^block)(void) = ^{
 		[self performInstallationWithInfo:info];
-	else
-		[NSThread detachNewThreadSelector:@selector(performInstallationWithInfo:) toTarget:self withObject:info];
+	};
+
+	if (synchronously) {
+		block();
+	} else {
+		dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), block);
+	}
 }
 
 @end

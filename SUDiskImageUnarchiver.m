@@ -145,7 +145,9 @@ finally:
 
 - (void)start
 {
-	[NSThread detachNewThreadSelector:@selector(extractDMG) toTarget:self withObject:nil];
+	dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+		[self extractDMG];
+	});
 }
 
 + (void)load
