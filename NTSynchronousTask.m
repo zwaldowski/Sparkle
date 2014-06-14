@@ -132,9 +132,10 @@
 + (NSData*)task:(NSString*)toolPath directory:(NSString*)currentDirectory withArgs:(NSArray*)args input:(NSData*)input
 {
 	// we need this wacky pool here, otherwise we run out of pipes, the pipes are internally autoreleased
+	NSData *result = nil;
+
 	NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
-	NSData* result = nil;
-	
+
 	@try
 	{
 		NTSynchronousTask* task = [[NTSynchronousTask alloc] init];
@@ -160,11 +161,12 @@
 +(int)	task:(NSString*)toolPath directory:(NSString*)currentDirectory withArgs:(NSArray*)args input:(NSData*)input output: (NSData**)outData
 {
 	// we need this wacky pool here, otherwise we run out of pipes, the pipes are internally autoreleased
-	NSAutoreleasePool *	pool = [[NSAutoreleasePool alloc] init];
 	int					taskResult = 0;
 	if( outData )
 		*outData = nil;
-	
+
+	NSAutoreleasePool *	pool = [[NSAutoreleasePool alloc] init];
+
 	@try {
 		NTSynchronousTask* task = [[NTSynchronousTask alloc] init];
 		
@@ -172,7 +174,7 @@
 		
 		taskResult = [task result];
 		if( outData )
-			*outData = [[task output] retain];
+			*outData = CFBridgingRetain(task);
 				
 		[task release];
 	} @catch (NSException *localException) {
@@ -183,7 +185,7 @@
 	
 	// retained above
 	if( outData )
-		[*outData autorelease];
+		*outData = CFBridgingRelease(outData);
 	
     return taskResult;
 }

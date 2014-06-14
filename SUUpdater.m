@@ -51,7 +51,7 @@ NSString *const SUUpdaterAppcastNotificationKey = @"SUUpdaterAppCastNotification
 #pragma mark Initialization
 
 static NSMutableDictionary *sharedUpdaters = nil;
-static NSString * const SUUpdaterDefaultsObservationContext = @"SUUpdaterDefaultsObservationContext";
+static void *SUUpdaterDefaultsObservationContext = &SUUpdaterDefaultsObservationContext;
 
 + (SUUpdater *)sharedUpdater
 {

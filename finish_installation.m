@@ -193,22 +193,25 @@ int main (int argc, const char * argv[])
 	#else
 	NSString*	selfPath = [[NSBundle mainBundle] bundlePath];
 	#endif
+
+	NSApplication *app = [NSApplication sharedApplication];
 	
 	BOOL shouldShowUI = (argc > 6) ? atoi(argv[6]) : 1;
 	if (shouldShowUI)
 	{
-		[[NSApplication sharedApplication] activateIgnoringOtherApps: YES];
+		[app activateIgnoringOtherApps: YES];
 	}
 	
-	[NSApplication sharedApplication];
-	[[[TerminationListener alloc] initWithHostPath: (argc > 1) ? argv[1] : NULL
-                                    executablePath: (argc > 2) ? argv[2] : NULL
-                                   parentProcessId: (argc > 3) ? atoi(argv[3]) : 0
-                                        folderPath: (argc > 4) ? argv[4] : NULL
-                                    shouldRelaunch: (argc > 5) ? atoi(argv[5]) : 1
-                                      shouldShowUI: shouldShowUI
-                                          selfPath: selfPath] autorelease];
+	TerminationListener *__unused listener = [[TerminationListener alloc] initWithHostPath: (argc > 1) ? argv[1] : NULL
+																			executablePath: (argc > 2) ? argv[2] : NULL
+																		   parentProcessId: (argc > 3) ? atoi(argv[3]) : 0
+																				folderPath: (argc > 4) ? argv[4] : NULL
+																			shouldRelaunch: (argc > 5) ? atoi(argv[5]) : 1
+																			  shouldShowUI: shouldShowUI
+																				  selfPath: selfPath];
 	[[NSApplication sharedApplication] run];
+
+	[listener release];
 	
 	[pool drain];
 	
