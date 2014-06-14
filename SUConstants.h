@@ -118,4 +118,19 @@ extern OSStatus SURelaunchError;
 extern OSStatus SUInstallationError;
 extern OSStatus SUDowngradeError;
 
+// -----------------------------------------------------------------------------
+//	Bundles and Strings
+// -----------------------------------------------------------------------------
+
+extern NSString *const SUBundleIdentifier;
+extern NSString *const SULocalizedStringTableKey;
+
+SU_ALWAYS_INLINE NSBundle *SUBundle(void)
+{
+	return [NSBundle bundleWithIdentifier:SUBundleIdentifier] ?: [NSBundle mainBundle];
+}
+
+#define SULocalizedString(key, comment) \
+	[SUBundle() localizedStringForKey:(key) value:@"" table:SULocalizedStringTableKey]
+
 #endif

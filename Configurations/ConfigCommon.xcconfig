@@ -1,10 +1,7 @@
 // Common
 
 FINISH_INSTALL_TOOL_NAME = Autoupdate
-
 CURRENT_PROJECT_VERSION = 1.6
-GCC_PRECOMPILE_PREFIX_HEADER = YES
-GCC_PREFIX_HEADER = $(SDKROOT)/System/Library/Frameworks/Cocoa.framework/Headers/Cocoa.h
 
 ARCHS = $(ARCHS_STANDARD)
 SDKROOT = macosx

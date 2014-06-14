@@ -326,7 +326,7 @@
 
 	// Copy the relauncher into a temporary directory so we can get to it after the new version's installed.
 	// Only the paranoid survive: if there's already a stray copy of relaunch there, we would have problems.
-	NSString *relaunchPathToCopy = [SPARKLE_BUNDLE pathForResource:finishInstallToolName ofType:@"app"];
+	NSString *relaunchPathToCopy = [SUBundle() pathForResource:finishInstallToolName ofType:@"app"];
 	if (relaunchPathToCopy != nil)
 	{
 		NSString *targetPath = [[host appSupportPath] stringByAppendingPathComponent:[relaunchPathToCopy lastPathComponent]];
