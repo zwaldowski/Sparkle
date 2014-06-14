@@ -38,7 +38,10 @@
     return self;
 }
 
-- (NSString *)description { return [NSString stringWithFormat:@"%@ <%@, %@>", self.class, self.bundleURL, self.installationURL]; }
+- (NSString *)description
+{
+	return [NSString stringWithFormat:@"%@ <%@, %@>", self.class, self.bundleURL, self.installationURL];
+}
 
 - (NSString *)bundlePath
 {
