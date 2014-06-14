@@ -43,20 +43,20 @@ extern int bsdiff(int argc, const char **argv);
 {
     if ((self = [super init])) {
         _relativePath = [relativePath copy];
-        _fromPath = [[oldTree stringByAppendingPathComponent:relativePath] retain];
-        _toPath = [[newTree stringByAppendingPathComponent:relativePath] retain];
+		_fromPath = [oldTree stringByAppendingPathComponent:relativePath];
+		_toPath = [newTree stringByAppendingPathComponent:relativePath];
     }
     return self;
 }
 
 - (NSString *)relativePath
 {
-    return [[_relativePath retain] autorelease];
+	return _relativePath;
 }
 
 - (NSString *)resultPath
 {
-    return [[_resultPath retain] autorelease];
+	return _resultPath;
 }
 
 - (void)main
@@ -65,7 +65,7 @@ extern int bsdiff(int argc, const char **argv);
     const char *argv[] = {"/usr/bin/bsdiff", [_fromPath fileSystemRepresentation], [_toPath fileSystemRepresentation], [temporaryFile fileSystemRepresentation]};
     int result = bsdiff(4, argv);
     if (!result)
-        _resultPath = [temporaryFile retain];
+		_resultPath = [temporaryFile copy];
 }
 
 @end
@@ -81,7 +81,7 @@ static NSDictionary *infoForFile(FTSENT *ent)
 
 static NSString *absolutePath(NSString *path)
 {
-    NSURL *url = [[[NSURL alloc] initFileURLWithPath:path] autorelease];
+	NSURL *url = [[NSURL alloc] initFileURLWithPath:path];
     return  [[url absoluteURL] path];
 }
 
@@ -121,149 +121,145 @@ static BOOL shouldDeleteThenExtract(NSString *key, NSDictionary* originalInfo, N
 
 int main(int argc, char **argv)
 {
-    if (argc != 5) {
-usage:
-        fprintf(stderr, "Usage: BinaryDelta [create | apply] before-tree after-tree patch-file\n");
-        exit(1);
-    }
+	static const int(^usage)(void) = ^{
+		fprintf(stderr, "Usage: BinaryDelta [create | apply] before-tree after-tree patch-file\n");
+		return 1;
+	};
 
-    NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
+	@autoreleasepool {
+		if (argc != 5) {
+			return usage();
+		}
 
-    NSString *command = [NSString stringWithUTF8String:argv[1]];
-    NSString *oldPath = stringWithFileSystemRepresentation(argv[2]);
-    NSString *newPath = stringWithFileSystemRepresentation(argv[3]);
-    NSString *patchFile = stringWithFileSystemRepresentation(argv[4]);
+		NSString *command = [NSString stringWithUTF8String:argv[1]];
+		NSString *oldPath = stringWithFileSystemRepresentation(argv[2]);
+		NSString *newPath = stringWithFileSystemRepresentation(argv[3]);
+		NSString *patchFile = stringWithFileSystemRepresentation(argv[4]);
 
-    if ([command isEqualToString:@"apply"]) {
-        int result = applyBinaryDelta(oldPath, newPath, patchFile);
-        [pool drain];
-        return result;
-    }
-    if (![command isEqualToString:@"create"]) {
-        [pool drain];
-        goto usage;
-    }
+		if ([command isEqualToString:@"apply"]) {
+			int result = applyBinaryDelta(oldPath, newPath, patchFile);
+			return result;
+		}
+		if (![command isEqualToString:@"create"]) {
+			return usage();
+		}
 
-    NSMutableDictionary *originalTreeState = [NSMutableDictionary dictionary];
+		NSMutableDictionary *originalTreeState = [NSMutableDictionary dictionary];
 
-    const char *sourcePaths[] = {[oldPath fileSystemRepresentation], 0};
-    FTS *fts = fts_open((char* const*)sourcePaths, FTS_PHYSICAL | FTS_NOCHDIR, compareFiles);
-    if (!fts) {
-        [pool drain];
-        perror("fts_open");
-        return 1;
-    }
+		const char *sourcePaths[] = {[oldPath fileSystemRepresentation], 0};
+		FTS *fts = fts_open((char* const*)sourcePaths, FTS_PHYSICAL | FTS_NOCHDIR, compareFiles);
+		if (!fts) {
+			perror("fts_open");
+			return 1;
+		}
 
-    fprintf(stderr, "Processing %s...", [oldPath UTF8String]);
-    FTSENT *ent = 0;
-    while ((ent = fts_read(fts))) {
-        if (ent->fts_info != FTS_F && ent->fts_info != FTS_SL && ent->fts_info != FTS_D)
-            continue;
+		fprintf(stderr, "Processing %s...", [oldPath UTF8String]);
+		FTSENT *ent = 0;
+		while ((ent = fts_read(fts))) {
+			if (ent->fts_info != FTS_F && ent->fts_info != FTS_SL && ent->fts_info != FTS_D)
+				continue;
 
-        NSString *key = pathRelativeToDirectory(oldPath, stringWithFileSystemRepresentation(ent->fts_path));
-        if (![key length])
-            continue;
+			NSString *key = pathRelativeToDirectory(oldPath, stringWithFileSystemRepresentation(ent->fts_path));
+			if (![key length])
+				continue;
 
-        NSDictionary *info = infoForFile(ent);
-        [originalTreeState setObject:info forKey:key];
-    }
-    fts_close(fts);
+			NSDictionary *info = infoForFile(ent);
+			[originalTreeState setObject:info forKey:key];
+		}
+		fts_close(fts);
 
-    NSString *beforeHash = hashOfTree(oldPath);
+		NSString *beforeHash = hashOfTree(oldPath);
 
-    NSMutableDictionary *newTreeState = [NSMutableDictionary dictionary];
-    for (NSString *key in originalTreeState)
-    {
-        [newTreeState setObject:[NSNull null] forKey:key];
-    }
+		NSMutableDictionary *newTreeState = [NSMutableDictionary dictionary];
+		for (NSString *key in originalTreeState)
+		{
+			[newTreeState setObject:[NSNull null] forKey:key];
+		}
 
-    fprintf(stderr, "\nProcessing %s...  ", [newPath UTF8String]);
-    sourcePaths[0] = [newPath fileSystemRepresentation];
-    fts = fts_open((char* const*)sourcePaths, FTS_PHYSICAL | FTS_NOCHDIR, compareFiles);
-    if (!fts) {
-        [pool drain];
-        perror("fts_open");
-        return 1;
-    }
+		fprintf(stderr, "\nProcessing %s...  ", [newPath UTF8String]);
+		sourcePaths[0] = [newPath fileSystemRepresentation];
+		fts = fts_open((char* const*)sourcePaths, FTS_PHYSICAL | FTS_NOCHDIR, compareFiles);
+		if (!fts) {
+			perror("fts_open");
+			return 1;
+		}
 
 
-    while ((ent = fts_read(fts))) {
-        if (ent->fts_info != FTS_F && ent->fts_info != FTS_SL && ent->fts_info != FTS_D)
-            continue;
+		while ((ent = fts_read(fts))) {
+			if (ent->fts_info != FTS_F && ent->fts_info != FTS_SL && ent->fts_info != FTS_D)
+				continue;
 
-        NSString *key = pathRelativeToDirectory(newPath, stringWithFileSystemRepresentation(ent->fts_path));
-        if (![key length])
-            continue;
+			NSString *key = pathRelativeToDirectory(newPath, stringWithFileSystemRepresentation(ent->fts_path));
+			if (![key length])
+				continue;
 
-        NSDictionary *info = infoForFile(ent);
-        NSDictionary *oldInfo = [originalTreeState objectForKey:key];
+			NSDictionary *info = infoForFile(ent);
+			NSDictionary *oldInfo = [originalTreeState objectForKey:key];
 
-        if ([info isEqual:oldInfo])
-            [newTreeState removeObjectForKey:key];
-        else
-            [newTreeState setObject:info forKey:key];
-    }
-    fts_close(fts);
+			if ([info isEqual:oldInfo])
+				[newTreeState removeObjectForKey:key];
+			else
+				[newTreeState setObject:info forKey:key];
+		}
+		fts_close(fts);
 
-    NSString *afterHash = hashOfTree(newPath);
+		NSString *afterHash = hashOfTree(newPath);
 
-    fprintf(stderr, "\nGenerating delta...  ");
+		fprintf(stderr, "\nGenerating delta...  ");
 
-    NSString *temporaryFile = temporaryPatchFile(patchFile);
-    xar_t x = xar_open([temporaryFile fileSystemRepresentation], WRITE);
-    xar_opt_set(x, XAR_OPT_COMPRESSION, "bzip2");
-    xar_subdoc_t attributes = xar_subdoc_new(x, "binary-delta-attributes");
-    xar_subdoc_prop_set(attributes, "before-sha1", [beforeHash UTF8String]);
-    xar_subdoc_prop_set(attributes, "after-sha1", [afterHash UTF8String]);
+		NSString *temporaryFile = temporaryPatchFile(patchFile);
+		xar_t x = xar_open([temporaryFile fileSystemRepresentation], WRITE);
+		xar_opt_set(x, XAR_OPT_COMPRESSION, "bzip2");
+		xar_subdoc_t attributes = xar_subdoc_new(x, "binary-delta-attributes");
+		xar_subdoc_prop_set(attributes, "before-sha1", [beforeHash UTF8String]);
+		xar_subdoc_prop_set(attributes, "after-sha1", [afterHash UTF8String]);
 
-    NSOperationQueue *deltaQueue = [[NSOperationQueue alloc] init];
-    NSMutableArray *deltaOperations = [NSMutableArray array];
+		NSOperationQueue *deltaQueue = [[NSOperationQueue alloc] init];
+		NSMutableArray *deltaOperations = [NSMutableArray array];
 
-    NSArray *keys = [[newTreeState allKeys] sortedArrayUsingSelector:@selector(compare:)];
-    for (NSString* key in keys) {
-        id value = [newTreeState valueForKey:key];
+		NSArray *keys = [[newTreeState allKeys] sortedArrayUsingSelector:@selector(compare:)];
+		for (NSString* key in keys) {
+			id value = [newTreeState valueForKey:key];
 
-        if ([value isEqual:[NSNull null]]) {
-            xar_file_t newFile = xar_add_frombuffer(x, 0, [key fileSystemRepresentation], (char *)"", 1);
-            assert(newFile);
-            xar_prop_set(newFile, "delete", "true");
-            continue;
-        }
+			if ([value isEqual:[NSNull null]]) {
+				xar_file_t newFile = xar_add_frombuffer(x, 0, [key fileSystemRepresentation], (char *)"", 1);
+				assert(newFile);
+				xar_prop_set(newFile, "delete", "true");
+				continue;
+			}
 
-        NSDictionary *originalInfo = [originalTreeState objectForKey:key];
-        NSDictionary *newInfo = [newTreeState objectForKey:key];
-        if (shouldSkipDeltaCompression(key, originalInfo, newInfo)) {
-            NSString *path = [newPath stringByAppendingPathComponent:key];
-            xar_file_t newFile = xar_add_frompath(x, 0, [key fileSystemRepresentation], [path fileSystemRepresentation]);
-            assert(newFile);
-            if (shouldDeleteThenExtract(key, originalInfo, newInfo))
-                xar_prop_set(newFile, "delete-then-extract", "true");
-        } else {
-            CreateBinaryDeltaOperation *operation = [[CreateBinaryDeltaOperation alloc] initWithRelativePath:key oldTree:oldPath newTree:newPath];
-            [deltaQueue addOperation:operation];
-            [deltaOperations addObject:operation];
-            [operation release];
-        }
-    }
+			NSDictionary *originalInfo = [originalTreeState objectForKey:key];
+			NSDictionary *newInfo = [newTreeState objectForKey:key];
+			if (shouldSkipDeltaCompression(key, originalInfo, newInfo)) {
+				NSString *path = [newPath stringByAppendingPathComponent:key];
+				xar_file_t newFile = xar_add_frompath(x, 0, [key fileSystemRepresentation], [path fileSystemRepresentation]);
+				assert(newFile);
+				if (shouldDeleteThenExtract(key, originalInfo, newInfo))
+					xar_prop_set(newFile, "delete-then-extract", "true");
+			} else {
+				CreateBinaryDeltaOperation *operation = [[CreateBinaryDeltaOperation alloc] initWithRelativePath:key oldTree:oldPath newTree:newPath];
+				[deltaQueue addOperation:operation];
+				[deltaOperations addObject:operation];
+			}
+		}
 
-    [deltaQueue waitUntilAllOperationsAreFinished];
-    [deltaQueue release];
+		[deltaQueue waitUntilAllOperationsAreFinished];
 
-    for (CreateBinaryDeltaOperation *operation in deltaOperations) {
-        NSString *resultPath = [operation resultPath];
-        xar_file_t newFile = xar_add_frompath(x, 0, [[operation relativePath] fileSystemRepresentation], [resultPath fileSystemRepresentation]);
-        assert(newFile);
-        xar_prop_set(newFile, "binary-delta", "true");
-        unlink([resultPath fileSystemRepresentation]);
-    }
+		for (CreateBinaryDeltaOperation *operation in deltaOperations) {
+			NSString *resultPath = [operation resultPath];
+			xar_file_t newFile = xar_add_frompath(x, 0, [[operation relativePath] fileSystemRepresentation], [resultPath fileSystemRepresentation]);
+			assert(newFile);
+			xar_prop_set(newFile, "binary-delta", "true");
+			unlink([resultPath fileSystemRepresentation]);
+		}
 
-    xar_close(x);
+		xar_close(x);
 
-    unlink([patchFile fileSystemRepresentation]);
-    link([temporaryFile fileSystemRepresentation], [patchFile fileSystemRepresentation]);
-    unlink([temporaryFile fileSystemRepresentation]);
-    fprintf(stderr, "Done!\n");
+		unlink([patchFile fileSystemRepresentation]);
+		link([temporaryFile fileSystemRepresentation], [patchFile fileSystemRepresentation]);
+		unlink([temporaryFile fileSystemRepresentation]);
+		fprintf(stderr, "Done!\n");
+		return 0;
 
-    [pool drain];
-    return 0;
+	}
 }

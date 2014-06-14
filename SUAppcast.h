@@ -17,7 +17,7 @@
 @private
 	NSArray *items;
 	NSString *userAgentString;
-	id<SUAppcastDelegate> delegate;
+	__unsafe_unretained id<SUAppcastDelegate> delegate;
 	NSString *downloadFilename;
 	NSURLDownload *download;
 }

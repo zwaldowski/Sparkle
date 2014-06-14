@@ -14,10 +14,10 @@
 #import "NTSynchronousTask.h"
 
 @interface NTSynchronousTask ()
-@property (retain) NSTask *task;
-@property (retain) NSPipe *outputPipe;
-@property (retain) NSPipe *inputPipe;
-@property (readwrite, retain) NSData *output;
+@property (strong) NSTask *task;
+@property (strong) NSPipe *outputPipe;
+@property (strong) NSPipe *inputPipe;
+@property (readwrite, strong) NSData *output;
 @property (getter = isDone) BOOL done;
 @property (readwrite) int result;
 @end
@@ -47,9 +47,9 @@
     self = [super init];
 	if (self)
 	{
-		self.task = [[[NSTask alloc] init] autorelease];
-		self.outputPipe = [[[NSPipe alloc] init] autorelease];
-		self.inputPipe = [[[NSPipe alloc] init] autorelease];
+		self.task = [[NSTask alloc] init];
+		self.outputPipe = [[NSPipe alloc] init];
+		self.inputPipe = [[NSPipe alloc] init];
 		
 		self.task.standardInput = self.inputPipe;
 		self.task.standardOutput = self.outputPipe;
@@ -65,13 +65,6 @@
 - (void)dealloc
 {
 	[[NSNotificationCenter defaultCenter] removeObserver:self];
-
-    self.task = nil;
-    self.outputPipe = nil;
-    self.inputPipe = nil;
-	self.output = nil;
-
-    [super dealloc];
 }
 
 - (void)run:(NSString*)toolPath directory:(NSString*)currentDirectory withArgs:(NSArray*)args input:(NSData*)input
@@ -132,62 +125,46 @@
 + (NSData*)task:(NSString*)toolPath directory:(NSString*)currentDirectory withArgs:(NSArray*)args input:(NSData*)input
 {
 	// we need this wacky pool here, otherwise we run out of pipes, the pipes are internally autoreleased
-	NSData *result = nil;
+	@autoreleasepool {
 
-	NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
+		@try {
+			NTSynchronousTask* task = [[NTSynchronousTask alloc] init];
 
-	@try
-	{
-		NTSynchronousTask* task = [[NTSynchronousTask alloc] init];
-		
-		[task run:toolPath directory:currentDirectory withArgs:args input:input];
-		
-		if ([task result] == 0)
-			result = [[task output] retain];
-				
-		[task release];
-	}	
-	@catch (NSException *localException) { }
-	
-	[pool drain];
-	
-	// retained above
-	[result autorelease];
-	
-    return result;
+			[task run:toolPath directory:currentDirectory withArgs:args input:input];
+
+			if ([task result] == 0)
+				return [task output];
+
+		}
+		@catch (NSException *localException) {
+			return nil;
+		}
+	}
 }
 
 
 +(int)	task:(NSString*)toolPath directory:(NSString*)currentDirectory withArgs:(NSArray*)args input:(NSData*)input output: (NSData**)outData
 {
 	// we need this wacky pool here, otherwise we run out of pipes, the pipes are internally autoreleased
-	int					taskResult = 0;
-	if( outData )
-		*outData = nil;
+	@autoreleasepool {
 
-	NSAutoreleasePool *	pool = [[NSAutoreleasePool alloc] init];
+		@try {
+			NTSynchronousTask* task = [[NTSynchronousTask alloc] init];
 
-	@try {
-		NTSynchronousTask* task = [[NTSynchronousTask alloc] init];
-		
-		[task run:toolPath directory:currentDirectory withArgs:args input:input];
-		
-		taskResult = [task result];
-		if( outData )
-			*outData = CFBridgingRetain(task);
-				
-		[task release];
-	} @catch (NSException *localException) {
-		taskResult = errCppGeneral;
+			[task run:toolPath directory:currentDirectory withArgs:args input:input];
+
+			if( outData )
+				*outData = [task output];
+
+			return [task result];
+		} @catch (NSException *localException) {
+			if( outData )
+				*outData = nil;
+
+			return errCppGeneral;
+		}
+	
 	}
-	
-	[pool drain];
-	
-	// retained above
-	if( outData )
-		*outData = CFBridgingRelease(outData);
-	
-    return taskResult;
 }
 
 @end

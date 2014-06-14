@@ -48,7 +48,7 @@
 	executablepath	= execpath;
 	parentprocessid	= ppid;
 	folderpath		= infolderpath;
-	selfPath		= [inSelfPath retain];
+	selfPath		= inSelfPath;
     shouldRelaunch  = relaunch;
 	shouldShowUI	= showUI;
 	
@@ -57,7 +57,7 @@
 	if( alreadyTerminated )
 		[self parentHasQuit];
 	else
-		watchdogTimer = [[NSTimer scheduledTimerWithTimeInterval:CHECK_FOR_PARENT_TO_QUIT_TIME target:self selector:@selector(watchdog:) userInfo:nil repeats:YES] retain];
+		watchdogTimer = [NSTimer scheduledTimerWithTimeInterval:CHECK_FOR_PARENT_TO_QUIT_TIME target:self selector:@selector(watchdog:) userInfo:nil repeats:YES];
 
 	return self;
 }
@@ -66,30 +66,15 @@
 -(void)	dealloc
 {
 	[longInstallationTimer invalidate];
-	[longInstallationTimer release];
-	longInstallationTimer = nil;
-
-	[selfPath release];
-	selfPath = nil;
-    
-    [installationPath release];
-
-	[watchdogTimer release];
-	watchdogTimer = nil;
-
-	[host release];
-	host = nil;
-	
-	[super dealloc];
 }
 
 
 -(void)	parentHasQuit
 {
 	[watchdogTimer invalidate];
-	longInstallationTimer = [[NSTimer scheduledTimerWithTimeInterval: LONG_INSTALLATION_TIME
+	longInstallationTimer = [NSTimer scheduledTimerWithTimeInterval: LONG_INSTALLATION_TIME
 								target: self selector: @selector(showAppIconInDock:)
-								userInfo:nil repeats:NO] retain];
+								userInfo:nil repeats:NO];
 
 	if( folderpath )
 		[self install];
@@ -147,7 +132,6 @@
         [statusCtl beginActionWithTitle: SULocalizedString(@"Installing update...",@"")
                         maxProgressValue: 0 statusText: @""];
         [statusCtl showWindow: self];
-		[statusCtl release];
     }
 	
 	[SUInstaller installFromUpdateFolder: [[NSFileManager defaultManager] stringWithFileSystemRepresentation: folderpath length: strlen(folderpath)]
@@ -176,44 +160,41 @@ int main (int argc, const char * argv[])
 	if( argc < 5 || argc > 7 )
 		return EXIT_FAILURE;
 	
-	NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
+	@autoreleasepool {
 	
-	//ProcessSerialNumber		psn = { 0, kCurrentProcess };
-	//TransformProcessType( &psn, kProcessTransformToForegroundApplication );
+		//ProcessSerialNumber		psn = { 0, kCurrentProcess };
+		//TransformProcessType( &psn, kProcessTransformToForegroundApplication );
+
+		#if 0	// Cmdline tool
+		NSString*	selfPath = nil;
+		if( argv[0][0] == '/' )
+			selfPath = [[NSFileManager defaultManager] stringWithFileSystemRepresentation: argv[0] length: strlen(argv[0])];
+		else
+		{
+			selfPath = [[NSFileManager defaultManager] currentDirectoryPath];
+			selfPath = [selfPath stringByAppendingPathComponent: [[NSFileManager defaultManager] stringWithFileSystemRepresentation: argv[0] length: strlen(argv[0])]];
+		}
+		#else
+		NSString*	selfPath = [[NSBundle mainBundle] bundlePath];
+		#endif
+
+		NSApplication *app = [NSApplication sharedApplication];
 		
-	#if 0	// Cmdline tool
-	NSString*	selfPath = nil;
-	if( argv[0][0] == '/' )
-		selfPath = [[NSFileManager defaultManager] stringWithFileSystemRepresentation: argv[0] length: strlen(argv[0])];
-	else
-	{
-		selfPath = [[NSFileManager defaultManager] currentDirectoryPath];
-		selfPath = [selfPath stringByAppendingPathComponent: [[NSFileManager defaultManager] stringWithFileSystemRepresentation: argv[0] length: strlen(argv[0])]];
-	}
-	#else
-	NSString*	selfPath = [[NSBundle mainBundle] bundlePath];
-	#endif
+		BOOL shouldShowUI = (argc > 6) ? atoi(argv[6]) : 1;
+		if (shouldShowUI)
+		{
+			[app activateIgnoringOtherApps: YES];
+		}
 
-	NSApplication *app = [NSApplication sharedApplication];
-	
-	BOOL shouldShowUI = (argc > 6) ? atoi(argv[6]) : 1;
-	if (shouldShowUI)
-	{
-		[app activateIgnoringOtherApps: YES];
-	}
-	
-	TerminationListener *__unused listener = [[TerminationListener alloc] initWithHostPath: (argc > 1) ? argv[1] : NULL
-																			executablePath: (argc > 2) ? argv[2] : NULL
-																		   parentProcessId: (argc > 3) ? atoi(argv[3]) : 0
-																				folderPath: (argc > 4) ? argv[4] : NULL
-																			shouldRelaunch: (argc > 5) ? atoi(argv[5]) : 1
-																			  shouldShowUI: shouldShowUI
-																				  selfPath: selfPath];
-	[[NSApplication sharedApplication] run];
+		TerminationListener *__unused listener = [[TerminationListener alloc] initWithHostPath: (argc > 1) ? argv[1] : NULL
+																				executablePath: (argc > 2) ? argv[2] : NULL
+																			   parentProcessId: (argc > 3) ? atoi(argv[3]) : 0
+																					folderPath: (argc > 4) ? argv[4] : NULL
+																				shouldRelaunch: (argc > 5) ? atoi(argv[5]) : 1
+																				  shouldShowUI: shouldShowUI
+																					  selfPath: selfPath];
+		[[NSApplication sharedApplication] run];
 
-	[listener release];
-	
-	[pool drain];
-	
-	return EXIT_SUCCESS;
+		return EXIT_SUCCESS;
+	}
 }

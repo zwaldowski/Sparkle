@@ -33,8 +33,8 @@
 	self = [super initWithHost:host windowNibName:@"SUUpdateAlert"];
 	if (self)
 	{
-		host = [aHost retain];
-		updateItem = [item retain];
+		host = aHost;
+		updateItem = item;
 		[self setShouldCascadeWindows:NO];
 		
 		// Alex: This dummy line makes sure that the binary is linked against WebKit.
@@ -46,13 +46,6 @@
 }
 
 - (NSString *)description { return [NSString stringWithFormat:@"%@ <%@>", [self class], [host bundlePath]]; }
-
-- (void)dealloc
-{
-	[updateItem release];
-	[host release];
-	[super dealloc];
-}
 
 - (void)setVersionDisplayer: (id<SUVersionDisplay>)disp
 {
@@ -107,7 +100,7 @@
 	
 	// Stick a nice big spinner in the middle of the web view until the page is loaded.
 	NSRect frame = [[releaseNotesView superview] frame];
-	releaseNotesSpinner = [[[NSProgressIndicator alloc] initWithFrame:NSMakeRect(NSMidX(frame)-16, NSMidY(frame)-16, 32, 32)] autorelease];
+	releaseNotesSpinner = [[NSProgressIndicator alloc] initWithFrame:NSMakeRect(NSMidX(frame)-16, NSMidY(frame)-16, 32, 32)];
 	[releaseNotesSpinner setStyle:NSProgressIndicatorSpinningStyle];
 	[releaseNotesSpinner startAnimation:self];
 	webViewFinishedLoading = NO;
@@ -326,7 +319,7 @@
 // Clean up the contextual menu.
 - (NSArray *)webView:(WebView *)sender contextMenuItemsForElement:(NSDictionary *)element defaultMenuItems:(NSArray *)defaultMenuItems
 {
-	NSMutableArray *webViewMenuItems = [[defaultMenuItems mutableCopy] autorelease];
+	NSMutableArray *webViewMenuItems = [defaultMenuItems mutableCopy];
 	
 	if (webViewMenuItems)
 	{

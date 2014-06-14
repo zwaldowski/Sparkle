@@ -59,11 +59,11 @@
     if (!newBundle) {
         SULog(@"Failed to load NSBundle for update");
 		return cleanup();
-    }
-    
-	result = SecStaticCodeCreateWithPath((CFURLRef)[newBundle executableURL], kSecCSDefaultFlags, &staticCode);
-    if (result != 0) {
-        SULog(@"Failed to get static code %d", result);
+	}
+
+	result = SecStaticCodeCreateWithPath((__bridge CFURLRef)[newBundle executableURL], kSecCSDefaultFlags, &staticCode);
+	if (result != 0) {
+		SULog(@"Failed to get static code %d", result);
 		return cleanup();
     }
     
@@ -71,7 +71,7 @@
 	result = SecStaticCodeCheckValidityWithErrors(staticCode, kSecCSDefaultFlags | kSecCSCheckAllArchitectures, requirement, &error);
 	if (result != noErr) {
 		if (outError) {
-			*outError = [(NSError *)error autorelease];
+			*outError = CFBridgingRelease(error);
 		} else {
 			CFRelease(error);
 		}

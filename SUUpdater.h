@@ -22,9 +22,9 @@
 
 	NSString *customUserAgentString;
 	SUHost *host;
-	IBOutlet id delegate;
+	IBOutlet id __unsafe_unretained delegate;
 }
-@property (assign) id delegate;
+@property (unsafe_unretained) id delegate;
 
 + (SUUpdater *)sharedUpdater;
 + (SUUpdater *)updaterForBundle:(NSBundle *)bundle;
