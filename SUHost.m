@@ -38,11 +38,16 @@
     return self;
 }
 
-- (NSString *)description { return [NSString stringWithFormat:@"%@ <%@, %@>", [self class], [self bundlePath], [self installationPath]]; }
+- (NSString *)description { return [NSString stringWithFormat:@"%@ <%@, %@>", self.class, self.bundleURL, self.installationURL]; }
 
 - (NSString *)bundlePath
 {
-    return [bundle bundlePath];
+	return [bundle bundlePath];
+}
+
+- (NSURL *)bundleURL
+{
+	return [bundle bundleURL];
 }
 
 - (NSString *)appSupportPath
@@ -61,15 +66,42 @@
     return appSupportPath;
 }
 
+- (NSURL *)appSupportURL
+{
+	NSURL *appSupportURL = [[NSFileManager defaultManager] URLForDirectory:NSApplicationSupportDirectory inDomain:NSUserDomainMask appropriateForURL:nil create:YES error:NULL];
+	if (!appSupportURL)
+	{
+		SULog(@"Failed to find app support directory! Using ~/Library/Application Support...");
+		appSupportURL = [NSURL fileURLWithPath:[@"~/Library/Application Support" stringByExpandingTildeInPath]];
+	}
+	appSupportURL = [appSupportURL URLByAppendingPathComponent:self.name isDirectory:YES];
+	appSupportURL = [appSupportURL URLByAppendingPathComponent:@".Sparkle" isDirectory:YES];
+	return appSupportURL;
+}
+
 - (NSString *)installationPath
 {
 #if NORMALIZE_INSTALLED_APP_NAME
-    // We'll install to "#{CFBundleName}.app", but only if that path doesn't already exist. If we're "Foo 4.2.app," and there's a "Foo.app" in this directory, we don't want to overwrite it! But if there's no "Foo.app," we'll take that name.
-    NSString *normalizedAppPath = [[[bundle bundlePath] stringByDeletingLastPathComponent] stringByAppendingPathComponent: [NSString stringWithFormat: @"%@.%@", [bundle objectForInfoDictionaryKey:@"CFBundleName"], [[bundle bundlePath] pathExtension]]];
-    if (![[NSFileManager defaultManager] fileExistsAtPath:[[[bundle bundlePath] stringByDeletingLastPathComponent] stringByAppendingPathComponent: [NSString stringWithFormat: @"%@.%@", [bundle objectForInfoDictionaryKey:@"CFBundleName"], [[bundle bundlePath] pathExtension]]]])
-        return normalizedAppPath;
+	// We'll install to "#{CFBundleName}.app", but only if that path doesn't already exist. If we're "Foo 4.2.app," and there's a "Foo.app" in this directory, we don't want to overwrite it! But if there's no "Foo.app," we'll take that name.
+	NSString *normalizedAppPath = [[[bundle bundlePath] stringByDeletingLastPathComponent] stringByAppendingPathComponent: [NSString stringWithFormat: @"%@.%@", [bundle objectForInfoDictionaryKey:@"CFBundleName"], [[bundle bundlePath] pathExtension]]];
+	if (![[NSFileManager defaultManager] fileExistsAtPath:[[[bundle bundlePath] stringByDeletingLastPathComponent] stringByAppendingPathComponent: [NSString stringWithFormat: @"%@.%@", [bundle objectForInfoDictionaryKey:@"CFBundleName"], [[bundle bundlePath] pathExtension]]]])
+		return normalizedAppPath;
 #endif
 	return [bundle bundlePath];
+}
+
+- (NSURL *)installationURL
+{
+#if NORMALIZE_INSTALLED_APP_NAME
+	// We'll install to "#{CFBundleName}.app", but only if that path doesn't already exist. If we're "Foo 4.2.app," and there's a "Foo.app" in this directory, we don't want to overwrite it! But if there's no "Foo.app," we'll take that name.
+	NSURL *bundleURL = bundle.bundleURL;
+	NSString *name = [bundle objectForInfoDictionaryKey:(__bridge id)kCFBundleNameKey];
+	NSURL *normalizedAppURL = [[bundleURL.URLByDeletingLastPathComponent URLByAppendingPathComponent:name isDirectory:YES] URLByAppendingPathExtension:bundleURL.pathExtension];
+	if (![normalizedAppURL checkResourceIsReachableAndReturnError:NULL]) {
+		return normalizedAppURL;
+	}
+#endif
+	return [bundle bundleURL];
 }
 
 - (NSString *)name
@@ -85,9 +117,9 @@
 
 - (NSString *)version
 {
-	NSString *version = [bundle objectForInfoDictionaryKey:@"CFBundleVersion"];
+	NSString *version = [bundle objectForInfoDictionaryKey:(__bridge id)kCFBundleVersionKey];
 	if (!version || [version isEqualToString:@""])
-		[NSException raise:@"SUNoVersionException" format:@"This host (%@) has no CFBundleVersion! This attribute is required.", [self bundlePath]];
+		[NSException raise:@"SUNoVersionException" format:@"This host (%@) has no bundle version! This attribute is required.", self.bundleURL];
 	return version;
 }
 

@@ -25,6 +25,9 @@
 - (NSString *)bundlePath;
 - (NSString *)appSupportPath;
 - (NSString *)installationPath;
+@property (nonatomic, readonly) NSURL *bundleURL;
+@property (nonatomic, readonly) NSURL *appSupportURL;
+@property (nonatomic, readonly) NSURL *installationURL;
 - (NSString *)name;
 - (NSString *)version;
 - (NSString *)displayVersion;
