@@ -53,8 +53,10 @@ static NSString * const SUInstallerInstallationPathKey = @"SUInstallerInstallati
 		[mutableInfo setObject:installationPath forKey:SUInstallerInstallationPathKey];
 		if (!result && error)
 			[mutableInfo setObject:error forKey:SUInstallerErrorKey];
-		[self performSelectorOnMainThread:@selector(finishInstallationWithInfo:) withObject:mutableInfo waitUntilDone:NO];
-    
+
+		dispatch_async(dispatch_get_main_queue(), ^{
+			[self finishInstallationWithInfo:[mutableInfo copy]];
+		});
 	}
 }
 

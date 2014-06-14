@@ -251,7 +251,10 @@ static void *SUUpdaterDefaultsObservationContext = &SUUpdaterDefaultsObservation
 			
 			// Don't perform automatic checks on unconnected laptops or dial-up connections that aren't online:
 			NSMutableDictionary*		theDict = [NSMutableDictionary dictionary];
-			[self performSelectorOnMainThread: @selector(putFeedURLIntoDictionary:) withObject: theDict waitUntilDone: YES];	// Get feed URL on main thread, it's not safe to call elsewhere.
+			dispatch_sync(dispatch_get_main_queue(), ^{
+				// Get feed URL on main thread, it's not safe to call elsewhere.
+				[self putFeedURLIntoDictionary:theDict];
+			});
 			
 			const char *hostname = [[[theDict objectForKey: @"feedURL"] host] cStringUsingEncoding: NSUTF8StringEncoding];
 			SCNetworkReachabilityRef reachability = SCNetworkReachabilityCreateWithName(NULL, hostname);
@@ -275,7 +278,10 @@ static void *SUUpdaterDefaultsObservationContext = &SUUpdaterDefaultsObservation
 			}
 
 			// If the network's not reachable, we pass a nil driver into checkForUpdatesWithDriver, which will then reschedule the next update so we try again later.
-			[self performSelectorOnMainThread: @selector(checkForUpdatesWithDriver:) withObject: isNetworkReachable ? inDriver : nil waitUntilDone: NO];
+			SUUpdateDriver *theDriver = isNetworkReachable ? inDriver : nil;
+			dispatch_async(dispatch_get_main_queue(), ^{
+				[self checkForUpdatesWithDriver:theDriver];
+			});
 		} @catch (NSException *localException) {
 			SULog(@"UNCAUGHT EXCEPTION IN UPDATE CHECK TIMER: %@",[localException reason]);
 		}

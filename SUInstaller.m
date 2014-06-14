@@ -162,13 +162,19 @@ static NSString*	sUpdateFolder = nil;
 	if (result)
 	{
 		[self mdimportInstallationPath:installationPath];
-		if ([delegate respondsToSelector:@selector(installerFinishedForHost:)])
-			[delegate performSelectorOnMainThread: @selector(installerFinishedForHost:) withObject: host waitUntilDone: NO];
+		if ([delegate respondsToSelector:@selector(installerFinishedForHost:)]) {
+			dispatch_async(dispatch_get_main_queue(), ^{
+				[delegate installerFinishedForHost:host];
+			});
+		}
 	}
 	else
 	{
-		if ([delegate respondsToSelector:@selector(installerForHost:failedWithError:)])
-			[self performSelectorOnMainThread: @selector(notifyDelegateOfFailure:) withObject: [NSDictionary dictionaryWithObjectsAndKeys: host, SUNotifyDictHostKey, error, SUNotifyDictErrorKey, delegate, SUNotifyDictDelegateKey, nil] waitUntilDone: NO];
+		if ([delegate respondsToSelector:@selector(installerForHost:failedWithError:)]) {
+			dispatch_async(dispatch_get_main_queue(), ^{
+				[self notifyDelegateOfFailure:[NSDictionary dictionaryWithObjectsAndKeys: host, SUNotifyDictHostKey, error, SUNotifyDictErrorKey, delegate, SUNotifyDictDelegateKey, nil]];
+			});
+		}
 	}		
 }
 

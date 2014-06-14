@@ -23,6 +23,13 @@
 #include <unistd.h>
 #include <sys/param.h>
 
+SU_ALWAYS_INLINE void dispatch_sync_main_safe(dispatch_block_t block) {
+	if (NSThread.isMainThread) {
+		block();
+	} else {
+		dispatch_sync(dispatch_get_main_queue(), block);
+	}
+}
 
 @interface SUPlainInstaller (MMExtendedAttributes)
 // Removes the directory tree rooted at |root| from the file quarantine.
@@ -206,7 +213,10 @@ static BOOL AuthorizationExecuteWithPrivilegesAndWait(AuthorizationRef authoriza
 		if (res)
 		{
 			SULog(@"releaseFromQuarantine");
-			[self performSelectorOnMainThread:@selector(releaseFromQuarantine:) withObject:src waitUntilDone:YES];
+
+			dispatch_sync_main_safe(^{
+				[self releaseFromQuarantine:src];
+			});
 		}
 		
 		if( res )	// Set permissions while it's still in source, so we have it with working and correct perms when it arrives at destination.
@@ -262,7 +272,10 @@ static BOOL AuthorizationExecuteWithPrivilegesAndWait(AuthorizationRef authoriza
         if (res)
 		{
 			SULog(@"releaseFromQuarantine after installing");
-			[self performSelectorOnMainThread:@selector(releaseFromQuarantine:) withObject:dst waitUntilDone:YES];
+
+			dispatch_sync_main_safe(^{
+				[self releaseFromQuarantine:dst];
+			});
 		}
 
 		if (!res)
@@ -507,7 +520,9 @@ static BOOL AuthorizationExecuteWithPrivilegesAndWait(AuthorizationRef authoriza
 	// new home in case it's moved across filesystems: if that
 	// happens, the move is actually a copy, and it may result
 	// in the application being quarantined.
-	[self performSelectorOnMainThread:@selector(releaseFromQuarantine:) withObject:dst waitUntilDone:YES];
+	dispatch_sync_main_safe(^{
+		[self releaseFromQuarantine:dst];
+	});
 	
 	return YES;
 }
