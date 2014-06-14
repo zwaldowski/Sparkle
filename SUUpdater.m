@@ -119,7 +119,10 @@ static void *SUUpdaterDefaultsObservationContext = &SUUpdaterDefaultsObservation
     return [self initForBundle:[NSBundle mainBundle]];
 }
 
-- (NSString *)description { return [NSString stringWithFormat:@"%@ <%@, %@>", [self class], [host bundlePath], [host installationPath]]; }
+- (NSString *)description
+{
+	return [NSString stringWithFormat:@"%@ <%@, %@>", NSStringFromClass(self.class), host.bundleURL, host.installationURL];
+}
 
 
 -(void)	notifyWillShowModalAlert

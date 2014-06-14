@@ -38,7 +38,10 @@
 	return self;
 }
 
-- (NSString *)description { return [NSString stringWithFormat:@"%@ <%@, %@>", [self class], [host bundlePath], [host installationPath]]; }
+- (NSString *)description
+{
+	return [NSString stringWithFormat:@"%@ <%@, %@>", NSStringFromClass(self.class), host.bundleURL, host.installationURL];
+}
 
 - (void)awakeFromNib
 {

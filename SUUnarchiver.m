@@ -28,7 +28,10 @@
 	return nil;
 }
 
-- (NSString *)description { return [NSString stringWithFormat:@"%@ <%@>", [self class], archivePath]; }
+- (NSString *)description
+{
+	return [NSString stringWithFormat:@"%@ <%@>", NSStringFromClass(self.class), archivePath];
+}
 
 - (void)start
 {
