@@ -11,54 +11,7 @@
 #import "SUConstants.h"
 #import "SUHost.h"
 
-static NSString * const SUInstallerPathKey = @"SUInstallerPath";
-static NSString * const SUInstallerTargetPathKey = @"SUInstallerTargetPath";
-static NSString * const SUInstallerTempNameKey = @"SUInstallerTempName";
-static NSString * const SUInstallerHostKey = @"SUInstallerHost";
-static NSString * const SUInstallerDelegateKey = @"SUInstallerDelegate";
-static NSString * const SUInstallerResultKey = @"SUInstallerResult";
-static NSString * const SUInstallerErrorKey = @"SUInstallerError";
-static NSString * const SUInstallerInstallationPathKey = @"SUInstallerInstallationPath";
-
 @implementation SUPlainInstaller
-
-+ (void)finishInstallationWithInfo:(NSDictionary *)info
-{
-	// *** GETS CALLED ON NON-MAIN THREAD!
-	
-	[self finishInstallationToPath:[info objectForKey:SUInstallerInstallationPathKey] withResult:[[info objectForKey:SUInstallerResultKey] boolValue] host:[info objectForKey:SUInstallerHostKey] error:[info objectForKey:SUInstallerErrorKey] delegate:[info objectForKey:SUInstallerDelegateKey]];
-}
-
-+ (void)performInstallationWithInfo:(NSDictionary *)info
-{
-	// *** GETS CALLED ON NON-MAIN THREAD!
-	
-	@autoreleasepool {
-	
-		NSError *error = nil;
-
-		NSString	*	oldPath = [[info objectForKey:SUInstallerHostKey] bundlePath];
-		NSString	*	installationPath = [info objectForKey:SUInstallerInstallationPathKey];
-		BOOL result = [self copyPathWithAuthentication:[info objectForKey:SUInstallerPathKey] overPath: installationPath temporaryName:[info objectForKey:SUInstallerTempNameKey] error:&error];
-
-		if( result )
-		{
-			BOOL	haveOld = [[NSFileManager defaultManager] fileExistsAtPath: oldPath];
-			BOOL	differentFromNew = ![oldPath isEqualToString: installationPath];
-			if( haveOld && differentFromNew )
-				[self _movePathToTrash: oldPath];	// On success, trash old copy if there's still one due to renaming.
-		}
-		NSMutableDictionary *mutableInfo = [info mutableCopy];
-		[mutableInfo setObject:[NSNumber numberWithBool:result] forKey:SUInstallerResultKey];
-		[mutableInfo setObject:installationPath forKey:SUInstallerInstallationPathKey];
-		if (!result && error)
-			[mutableInfo setObject:error forKey:SUInstallerErrorKey];
-
-		dispatch_async(dispatch_get_main_queue(), ^{
-			[self finishInstallationWithInfo:[mutableInfo copy]];
-		});
-	}
-}
 
 + (void)performInstallationToPath:(NSString *)installationPath fromPath:(NSString *)path host:(SUHost *)host delegate:delegate synchronously:(BOOL)synchronously versionComparator:(id <SUVersionComparison>)comparator
 {
@@ -75,11 +28,26 @@ static NSString * const SUInstallerInstallationPathKey = @"SUInstallerInstallati
     
     NSString *targetPath = [host installationPath];
     NSString *tempName = [self temporaryNameForPath:targetPath];
-	NSDictionary *info = [NSDictionary dictionaryWithObjectsAndKeys:path, SUInstallerPathKey, targetPath, SUInstallerTargetPathKey, tempName, SUInstallerTempNameKey, host, SUInstallerHostKey, delegate, SUInstallerDelegateKey, installationPath, SUInstallerInstallationPathKey, nil];
 
-	void(^block)(void) = ^{
-		[self performInstallationWithInfo:info];
-	};
+	void(^block)(void) = ^{ @autoreleasepool {
+
+		NSError *error = nil;
+
+		NSString *oldPath = [host bundlePath];
+		BOOL result = [self copyPathWithAuthentication:path overPath:installationPath temporaryName:tempName error:&error];
+
+		if (result) {
+			BOOL haveOld = [[NSFileManager defaultManager] fileExistsAtPath: oldPath];
+			BOOL differentFromNew = ![oldPath isEqualToString: installationPath];
+			if (haveOld && differentFromNew)
+				[self _movePathToTrash: oldPath];	// On success, trash old copy if there's still one due to renaming.
+			error = nil;
+		}
+
+		dispatch_async(dispatch_get_main_queue(), ^{
+			[self finishInstallationToPath:installationPath withResult:result host:host error:error delegate:delegate];
+		});
+	}};
 
 	if (synchronously) {
 		block();

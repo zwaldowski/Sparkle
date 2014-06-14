@@ -10,31 +10,7 @@
 #import <Cocoa/Cocoa.h>
 #import "SUConstants.h"
 
-NSString *SUPackageInstallerCommandKey = @"SUPackageInstallerCommand";
-NSString *SUPackageInstallerArgumentsKey = @"SUPackageInstallerArguments";
-NSString *SUPackageInstallerHostKey = @"SUPackageInstallerHost";
-NSString *SUPackageInstallerDelegateKey = @"SUPackageInstallerDelegate";
-NSString *SUPackageInstallerInstallationPathKey = @"SUPackageInstallerInstallationPathKey";
-
 @implementation SUPackageInstaller
-
-+ (void)finishInstallationWithInfo:(NSDictionary *)info
-{
-	[self finishInstallationToPath:[info objectForKey:SUPackageInstallerInstallationPathKey] withResult:YES host:[info objectForKey:SUPackageInstallerHostKey] error:nil delegate:[info objectForKey:SUPackageInstallerDelegateKey]];
-}
-
-+ (void)performInstallationWithInfo:(NSDictionary *)info
-{
-	@autoreleasepool {
-		NSTask *installer = [NSTask launchedTaskWithLaunchPath:[info objectForKey:SUPackageInstallerCommandKey] arguments:[info objectForKey:SUPackageInstallerArgumentsKey]];
-		[installer waitUntilExit];
-
-		// Known bug: if the installation fails or is canceled, Sparkle goes ahead and restarts, thinking everything is fine.
-		dispatch_async(dispatch_get_main_queue(), ^{
-			[self finishInstallationWithInfo:info];
-		});
-	}
-}
 
 + (void)performInstallationToPath:(NSString *)installationPath fromPath:(NSString *)path host:(SUHost *)host delegate:delegate synchronously:(BOOL)synchronously versionComparator:(id <SUVersionComparison>)comparator
 {
@@ -48,24 +24,29 @@ NSString *SUPackageInstallerInstallationPathKey = @"SUPackageInstallerInstallati
 	command = @"/usr/bin/open";
 	args = [NSArray arrayWithObjects:@"-W", @"-n", @"-b", @"com.apple.installer", path, nil];
 	
-	if (![[NSFileManager defaultManager] fileExistsAtPath:command])
-	{
+	if (![[NSFileManager defaultManager] fileExistsAtPath:command]) {
 		NSError *error = [NSError errorWithDomain:SUSparkleErrorDomain code:SUMissingInstallerToolError userInfo:[NSDictionary dictionaryWithObject:@"Couldn't find Apple's installer tool!" forKey:NSLocalizedDescriptionKey]];
-		[self finishInstallationToPath:installationPath withResult:NO host:host error:error delegate:delegate];
+		dispatch_async(dispatch_get_main_queue(), ^{
+			[self finishInstallationToPath:installationPath withResult:NO host:host error:error delegate:delegate];
+		});
+
+		return;
 	}
-	else 
-	{
-		NSDictionary *info = [NSDictionary dictionaryWithObjectsAndKeys:command, SUPackageInstallerCommandKey, args, SUPackageInstallerArgumentsKey, host, SUPackageInstallerHostKey, delegate, SUPackageInstallerDelegateKey, installationPath, SUPackageInstallerInstallationPathKey, nil];
 
-		void(^block)(void) = ^{
-			[self performInstallationWithInfo:info];
-		};
+	void(^block)(void) = ^{ @autoreleasepool {
+		NSTask *installer = [NSTask launchedTaskWithLaunchPath:command arguments:args];
+		[installer waitUntilExit];
 
-		if (synchronously) {
-			block();
-		} else {
-			dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), block);
-		}
+		// Known bug: if the installation fails or is canceled, Sparkle goes ahead and restarts, thinking everything is fine.
+		dispatch_async(dispatch_get_main_queue(), ^{
+			[self finishInstallationToPath:installationPath withResult:YES host:host error:nil delegate:delegate];
+		});
+	}};
+
+	if (synchronously) {
+		block();
+	} else {
+		dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), block);
 	}
 }
 
