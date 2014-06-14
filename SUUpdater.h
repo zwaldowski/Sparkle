@@ -123,10 +123,18 @@ extern NSString *const SUUpdaterAppcastNotificationKey;
 // Sent immediately before installing the specified update.
 - (void)updater:(SUUpdater *)updater willInstallUpdate:(SUAppcastItem *)update;
 
-// Return YES to delay the relaunch until you do some processing; invoke the given NSInvocation to continue.
-//	This is not called if the user didn't relaunch on the previous update, in that case it will immediately
-//	restart.
-- (BOOL)updater:(SUUpdater *)updater shouldPostponeRelaunchForUpdate:(SUAppcastItem *)update untilInvoking:(NSInvocation *)invocation;
+// Return YES to delay the relaunch until you do some processing; invoke the
+// given invocation to continue. This is not called if the user didn't relaunch
+// on the previous update, in that case it will immediately restart.
+//
+// If both this and the block version below are implemented, the block version
+// will be used instead.
+- (BOOL)updater:(SUUpdater *)updater shouldPostponeRelaunchForUpdate:(SUAppcastItem *)update untilInvoking:(NSInvocation *)invocation DEPRECATED_ATTRIBUTE;
+
+// Return YES to delay the relaunch until you do some processing; invoke the
+// given block to continue. Not called if the user didn't relaunch on the
+// previous update, in which case it will immediately restart.
+- (BOOL)updater:(SUUpdater *)updater shouldPostponeRelaunchForUpdate:(SUAppcastItem *)update completionHandler:(void(^)(void))invocation;
 
 // Some apps *can not* be relaunched in certain circumstances. They can use this method
 //	to prevent a relaunch "hard":
@@ -147,13 +155,22 @@ extern NSString *const SUUpdaterAppcastNotificationKey;
 - (NSString *)pathToRelaunchForUpdater:(SUUpdater *)updater;
 
 // Called before and after, respectively, an updater shows a modal alert window, to give the host
-//	the opportunity to hide attached windows etc. that may get in the way:
+// the opportunity to hide attached windows etc. that may get in the way:
 -(void)	updaterWillShowModalAlert:(SUUpdater *)updater;
 -(void)	updaterDidShowModalAlert:(SUUpdater *)updater;
 
 // Called when an update is scheduled to be silently installed on quit.
-// The invocation can be used to trigger an immediate silent install and relaunch.
-- (void)updater:(SUUpdater *)updater willInstallUpdateOnQuit:(SUAppcastItem *)update immediateInstallationInvocation:(NSInvocation *)invocation;
+// The invocation can be used to trigger immediate silent install and relaunch.
+//
+// If both this and the block version below are implemented, the block version
+// will be used instead.
+- (void)updater:(SUUpdater *)updater willInstallUpdateOnQuit:(SUAppcastItem *)update immediateInstallationInvocation:(NSInvocation *)invocation DEPRECATED_ATTRIBUTE;
+
+// Called when an update is scheduled to be silently installed on quit.
+// The given block can be used to trigger immediate silent install and relaunch.
+- (void)updater:(SUUpdater *)updater willInstallUpdateOnQuit:(SUAppcastItem *)update immediateInstallHandler:(void(^)(void))installImmediatelyBlock;
+
+// Called when an update cannot be silently installed on quit.
 - (void)updater:(SUUpdater *)updater didCancelInstallUpdateOnQuit:(SUAppcastItem *)update;
 
 @end

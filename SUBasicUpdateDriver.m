@@ -33,6 +33,7 @@
 @implementation SUBasicUpdateDriver {
 	SUAppcast *appcast;
 	SUUnarchiver *unarchiver;
+	BOOL _restartPostponed;
 }
 
 - (void)checkForUpdatesAtURL:(NSURL *)URL host:(SUHost *)aHost
@@ -298,18 +299,25 @@
     }
     
     // Give the host app an opportunity to postpone the install and relaunch.
-    static BOOL postponedOnce = NO;
-    if (!postponedOnce && [[updater delegate] respondsToSelector:@selector(updater:shouldPostponeRelaunchForUpdate:untilInvoking:)])
-    {
-        NSInvocation *invocation = [NSInvocation invocationWithMethodSignature:[[self class] instanceMethodSignatureForSelector:@selector(installWithToolAndRelaunch:)]];
-        [invocation setSelector:@selector(installWithToolAndRelaunch:)];
-        [invocation setArgument:&relaunch atIndex:2];
-        [invocation setTarget:self];
-        postponedOnce = YES;
-        if ([[updater delegate] updater:updater shouldPostponeRelaunchForUpdate:updateItem untilInvoking:invocation])
-            return;
-    }
+	if (!_restartPostponed) {
+		if ([[updater delegate] respondsToSelector:@selector(updater:shouldPostponeRelaunchForUpdate:completionHandler:)]) {
+			_restartPostponed = YES;
 
+			if ([[updater delegate] updater:updater shouldPostponeRelaunchForUpdate:updateItem completionHandler:^{
+				[self installWithToolAndRelaunch:NO];
+			}]) {
+				return;
+			}
+		} else if ([[updater delegate] respondsToSelector:@selector(updater:shouldPostponeRelaunchForUpdate:untilInvoking:)]) {
+			NSInvocation *invocation = [NSInvocation invocationWithMethodSignature:[[self class] instanceMethodSignatureForSelector:@selector(installWithToolAndRelaunch:)]];
+			[invocation setSelector:@selector(installWithToolAndRelaunch:)];
+			[invocation setArgument:&relaunch atIndex:2];
+			[invocation setTarget:self];
+			_restartPostponed = YES;
+			if ([[updater delegate] updater:updater shouldPostponeRelaunchForUpdate:updateItem untilInvoking:invocation])
+				return;
+		}
+    }
     
 	if ([[updater delegate] respondsToSelector:@selector(updater:willInstallUpdate:)])
 		[[updater delegate] updater:updater willInstallUpdate:updateItem];
