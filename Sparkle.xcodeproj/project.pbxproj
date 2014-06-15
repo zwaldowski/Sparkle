@@ -33,7 +33,7 @@
 		55C14F2A136EF9A900649790 /* SUWindowController.m in Sources */ = {isa = PBXBuildFile; fileRef = 61180BC90D64138900B4E0D1 /* SUWindowController.m */; };
 		55C14F32136EFC2400649790 /* SystemConfiguration.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 55C14F31136EFC2400649790 /* SystemConfiguration.framework */; };
 		55C14F3B136EFCB300649790 /* Autoupdate.app in Resources */ = {isa = PBXBuildFile; fileRef = 55C14BB7136EEF1500649790 /* Autoupdate.app */; };
-		55C14F7E136F005000649790 /* SUPlainInstallerInternals.m in Sources */ = {isa = PBXBuildFile; fileRef = 61B5F8E509C4CE3C00B25A18 /* SUPlainInstallerInternals.m */; };
+		55C14F7E136F005000649790 /* NSFileManager+SUAdditions.m in Sources */ = {isa = PBXBuildFile; fileRef = 61B5F8E509C4CE3C00B25A18 /* NSFileManager+SUAdditions.m */; };
 		55C14F9A136F045400649790 /* Security.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 61B5F8F609C4CEB300B25A18 /* Security.framework */; };
 		55C14FC7136F05E100649790 /* Sparkle.strings in Resources */ = {isa = PBXBuildFile; fileRef = 61AAE8220A321A7F00D8810D /* Sparkle.strings */; };
 		5D06E8D80FD68C8E005AE3F6 /* Sparkle.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8DC2EF5B0486A6940098B216 /* Sparkle.framework */; };
@@ -71,7 +71,7 @@
 		61227A160DB548B800AB99EA /* SUVersionComparisonTest.m in Sources */ = {isa = PBXBuildFile; fileRef = 61227A150DB548B800AB99EA /* SUVersionComparisonTest.m */; };
 		61299A2F09CA2DAB00B7442F /* SUDSAVerifier.h in Headers */ = {isa = PBXBuildFile; fileRef = 61299A2D09CA2DAB00B7442F /* SUDSAVerifier.h */; settings = {ATTRIBUTES = (); }; };
 		61299A3009CA2DAB00B7442F /* SUDSAVerifier.m in Sources */ = {isa = PBXBuildFile; fileRef = 61299A2E09CA2DAB00B7442F /* SUDSAVerifier.m */; };
-		61299A4A09CA2DD000B7442F /* SUPlainInstallerInternals.h in Headers */ = {isa = PBXBuildFile; fileRef = 6129984309C9E2DA00B7442F /* SUPlainInstallerInternals.h */; settings = {ATTRIBUTES = (); }; };
+		61299A4A09CA2DD000B7442F /* NSFileManager+SUAdditions.h in Headers */ = {isa = PBXBuildFile; fileRef = 6129984309C9E2DA00B7442F /* NSFileManager+SUAdditions.h */; settings = {ATTRIBUTES = (); }; };
 		61299A5C09CA6D4500B7442F /* SUConstants.h in Headers */ = {isa = PBXBuildFile; fileRef = 61299A5B09CA6D4500B7442F /* SUConstants.h */; settings = {ATTRIBUTES = (); }; };
 		61299A6009CA6EB100B7442F /* SUConstants.m in Sources */ = {isa = PBXBuildFile; fileRef = 61299A5F09CA6EB100B7442F /* SUConstants.m */; };
 		61299A8D09CA790200B7442F /* SUUnarchiver.h in Headers */ = {isa = PBXBuildFile; fileRef = 61299A8B09CA790200B7442F /* SUUnarchiver.h */; settings = {ATTRIBUTES = (); }; };
@@ -105,7 +105,7 @@
 		61B078CF15A5FB6100600039 /* SUCodeSigningVerifier.m in Sources */ = {isa = PBXBuildFile; fileRef = 61B078CD15A5FB6100600039 /* SUCodeSigningVerifier.m */; };
 		61B5F8ED09C4CE3C00B25A18 /* SUUpdater.h in Headers */ = {isa = PBXBuildFile; fileRef = 61B5F8E309C4CE3C00B25A18 /* SUUpdater.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		61B5F8EE09C4CE3C00B25A18 /* SUUpdater.m in Sources */ = {isa = PBXBuildFile; fileRef = 61B5F8E409C4CE3C00B25A18 /* SUUpdater.m */; };
-		61B5F8EF09C4CE3C00B25A18 /* SUPlainInstallerInternals.m in Sources */ = {isa = PBXBuildFile; fileRef = 61B5F8E509C4CE3C00B25A18 /* SUPlainInstallerInternals.m */; };
+		61B5F8EF09C4CE3C00B25A18 /* NSFileManager+SUAdditions.m in Sources */ = {isa = PBXBuildFile; fileRef = 61B5F8E509C4CE3C00B25A18 /* NSFileManager+SUAdditions.m */; };
 		61B5F8F709C4CEB300B25A18 /* Security.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 61B5F8F609C4CEB300B25A18 /* Security.framework */; };
 		61B5F90F09C4CF3A00B25A18 /* Sparkle.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8DC2EF5B0486A6940098B216 /* Sparkle.framework */; };
 		61B5F92E09C4CFD800B25A18 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 61B5F92A09C4CFD800B25A18 /* InfoPlist.strings */; };
@@ -135,6 +135,7 @@
 		61FA52880E2D9EA400EF58AD /* Sparkle.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8DC2EF5B0486A6940098B216 /* Sparkle.framework */; settings = {ATTRIBUTES = (Required, ); }; };
 		DB6A87C3194CD65C00630390 /* NSURL+SUAdditions.h in Headers */ = {isa = PBXBuildFile; fileRef = DB6A87C1194CD65C00630390 /* NSURL+SUAdditions.h */; };
 		DB6A87C4194CD65C00630390 /* NSURL+SUAdditions.m in Sources */ = {isa = PBXBuildFile; fileRef = DB6A87C2194CD65C00630390 /* NSURL+SUAdditions.m */; };
+		DB6A87F8194D030C00630390 /* NSURL+SUAdditions.m in Sources */ = {isa = PBXBuildFile; fileRef = DB6A87C2194CD65C00630390 /* NSURL+SUAdditions.m */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -305,7 +306,7 @@
 		612279DA0DB5470200AB99EA /* Sparkle Unit Tests-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; name = "Sparkle Unit Tests-Info.plist"; path = "Tests/Sparkle Unit Tests-Info.plist"; sourceTree = "<group>"; };
 		61227A140DB548B800AB99EA /* SUVersionComparisonTest.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = SUVersionComparisonTest.h; path = Tests/SUVersionComparisonTest.h; sourceTree = "<group>"; };
 		61227A150DB548B800AB99EA /* SUVersionComparisonTest.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = SUVersionComparisonTest.m; path = Tests/SUVersionComparisonTest.m; sourceTree = "<group>"; };
-		6129984309C9E2DA00B7442F /* SUPlainInstallerInternals.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = SUPlainInstallerInternals.h; sourceTree = "<group>"; };
+		6129984309C9E2DA00B7442F /* NSFileManager+SUAdditions.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = "NSFileManager+SUAdditions.h"; sourceTree = "<group>"; };
 		61299A2D09CA2DAB00B7442F /* SUDSAVerifier.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = SUDSAVerifier.h; sourceTree = "<group>"; };
 		61299A2E09CA2DAB00B7442F /* SUDSAVerifier.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = SUDSAVerifier.m; sourceTree = "<group>"; };
 		61299A5B09CA6D4500B7442F /* SUConstants.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = SUConstants.h; sourceTree = "<group>"; };
@@ -358,7 +359,7 @@
 		61B078CD15A5FB6100600039 /* SUCodeSigningVerifier.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = SUCodeSigningVerifier.m; sourceTree = "<group>"; };
 		61B5F8E309C4CE3C00B25A18 /* SUUpdater.h */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.h; path = SUUpdater.h; sourceTree = "<group>"; };
 		61B5F8E409C4CE3C00B25A18 /* SUUpdater.m */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.objc; path = SUUpdater.m; sourceTree = "<group>"; };
-		61B5F8E509C4CE3C00B25A18 /* SUPlainInstallerInternals.m */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.objc; path = SUPlainInstallerInternals.m; sourceTree = "<group>"; };
+		61B5F8E509C4CE3C00B25A18 /* NSFileManager+SUAdditions.m */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.objc; path = "NSFileManager+SUAdditions.m"; sourceTree = "<group>"; };
 		61B5F8F609C4CEB300B25A18 /* Security.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Security.framework; path = /System/Library/Frameworks/Security.framework; sourceTree = "<absolute>"; };
 		61B5F90209C4CEE200B25A18 /* Sparkle Test App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Sparkle Test App.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		61B5F90409C4CEE200B25A18 /* Test Application-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; name = "Test Application-Info.plist"; path = "Test Application/Test Application-Info.plist"; sourceTree = "<group>"; };
@@ -640,8 +641,6 @@
 				618FA5210DAE8E8A0026945C /* SUPackageInstaller.m */,
 				618FA5030DAE8AB80026945C /* SUPlainInstaller.h */,
 				618FA5040DAE8AB80026945C /* SUPlainInstaller.m */,
-				6129984309C9E2DA00B7442F /* SUPlainInstallerInternals.h */,
-				61B5F8E509C4CE3C00B25A18 /* SUPlainInstallerInternals.m */,
 			);
 			name = Installation;
 			sourceTree = "<group>";
@@ -657,6 +656,8 @@
 				61EF67550E25B58D00F754E0 /* SUHost.m */,
 				55C14F04136EF6DB00649790 /* SULog.h */,
 				55C14F05136EF6DB00649790 /* SULog.m */,
+				6129984309C9E2DA00B7442F /* NSFileManager+SUAdditions.h */,
+				61B5F8E509C4CE3C00B25A18 /* NSFileManager+SUAdditions.m */,
 				DB6A87C1194CD65C00630390 /* NSURL+SUAdditions.h */,
 				DB6A87C2194CD65C00630390 /* NSURL+SUAdditions.m */,
 			);
@@ -774,7 +775,7 @@
 				618FA5220DAE8E8A0026945C /* SUPackageInstaller.h in Headers */,
 				6102FE460E077FCE00F85D09 /* SUPipedUnarchiver.h in Headers */,
 				618FA5050DAE8AB80026945C /* SUPlainInstaller.h in Headers */,
-				61299A4A09CA2DD000B7442F /* SUPlainInstallerInternals.h in Headers */,
+				61299A4A09CA2DD000B7442F /* NSFileManager+SUAdditions.h in Headers */,
 				6101347B0DD2541A0049ACDF /* SUProbingUpdateDriver.h in Headers */,
 				61B93C090DD112FF00DCD2F8 /* SUScheduledUpdateDriver.h in Headers */,
 				61A225A40D1C4AC000430CCD /* SUStandardVersionComparator.h in Headers */,
@@ -1101,8 +1102,9 @@
 				55C14F0D136EF6F200649790 /* SUInstaller.m in Sources */,
 				55C14F08136EF6DB00649790 /* SULog.m in Sources */,
 				55C14F24136EF86F00649790 /* SUPackageInstaller.m in Sources */,
+				DB6A87F8194D030C00630390 /* NSURL+SUAdditions.m in Sources */,
 				55C14F21136EF84D00649790 /* SUPlainInstaller.m in Sources */,
-				55C14F7E136F005000649790 /* SUPlainInstallerInternals.m in Sources */,
+				55C14F7E136F005000649790 /* NSFileManager+SUAdditions.m in Sources */,
 				55C14F22136EF86000649790 /* SUStandardVersionComparator.m in Sources */,
 				55C14F20136EF84300649790 /* SUStatusController.m in Sources */,
 				55C14F23136EF86700649790 /* SUSystemProfiler.m in Sources */,
@@ -1160,7 +1162,7 @@
 				618FA5230DAE8E8A0026945C /* SUPackageInstaller.m in Sources */,
 				61D85D6D0E10B2ED00F9B4A9 /* SUPipedUnarchiver.m in Sources */,
 				618FA5060DAE8AB80026945C /* SUPlainInstaller.m in Sources */,
-				61B5F8EF09C4CE3C00B25A18 /* SUPlainInstallerInternals.m in Sources */,
+				61B5F8EF09C4CE3C00B25A18 /* NSFileManager+SUAdditions.m in Sources */,
 				6101347C0DD2541A0049ACDF /* SUProbingUpdateDriver.m in Sources */,
 				61B93C0A0DD112FF00DCD2F8 /* SUScheduledUpdateDriver.m in Sources */,
 				61A225A50D1C4AC000430CCD /* SUStandardVersionComparator.m in Sources */,

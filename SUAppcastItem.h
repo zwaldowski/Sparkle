@@ -18,7 +18,7 @@
 	
 	NSURL *releaseNotesURL;
 	
-	NSString *DSASignature;	
+	NSData *DSASignature;
 	NSString *minimumSystemVersion;
     NSString *maximumSystemVersion;
 	
@@ -36,7 +36,7 @@
 @property (copy, readonly) NSDate *date;
 @property (copy, readonly) NSString *itemDescription;
 @property (strong, readonly) NSURL *releaseNotesURL;
-@property (copy, readonly) NSString *DSASignature;
+@property (copy, readonly) NSData *DSASignature;
 @property (copy, readonly) NSString *minimumSystemVersion;
 @property (copy, readonly) NSString *maximumSystemVersion;
 @property (strong, readonly) NSURL *fileURL;
@@ -51,11 +51,6 @@
 
 - (BOOL)isDeltaUpdate;
 - (BOOL)isCriticalUpdate;
-
-// Returns the dictionary provided in initWithDictionary; this might be useful later for extensions.
-- (NSDictionary *)propertiesDictionary;
-
-- (NSURL *)infoURL;						// UK 2007-08-31
 
 @end
 

@@ -213,19 +213,6 @@ extern CFTypeRef SecTransformExecute(SecTransformRef transformRef, CFErrorRef* e
 #endif
 }
 
-+ (BOOL)validatePath:(NSString *)path withEncodedDSASignature:(NSString *)encodedSignature withPublicDSAKey:(NSString *)pkeyString
-{
-	if (!encodedSignature || !path) return NO;
-
-	SUDSAVerifier *verifier = [[self alloc] initWithPublicKeyString:pkeyString];
-
-	if (!verifier) return NO;
-
-	NSString *strippedSignature = [encodedSignature stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
-	NSData *signature = [[NSData alloc] initWithBase64Encoding:strippedSignature];
-	return [verifier verifyFileAtPath:path signature:signature];
-}
-
 - (instancetype)initWithPublicKeyString:(NSString *)string
 {
 #if MAC_OS_X_VERSION_MIN_REQUIRED < __MAC_10_7
@@ -293,13 +280,6 @@ extern CFTypeRef SecTransformExecute(SecTransformRef transformRef, CFErrorRef* e
 	return [self verifyStream:dataInputStream signature:signature];
 }
 
-- (BOOL)verifyFileAtPath:(NSString *)path signature:(NSData *)signature
-{
-	if (!path.length) return NO;
-	NSInputStream *dataInputStream = [NSInputStream inputStreamWithFileAtPath:path];
-	return [self verifyStream:dataInputStream signature:signature];
-}
-
 - (BOOL)verifyStream:(NSInputStream *)stream signature:(NSData *)signature
 {
 #if MAC_OS_X_VERSION_MIN_REQUIRED < __MAC_10_7
@@ -346,4 +326,3 @@ extern CFTypeRef SecTransformExecute(SecTransformRef transformRef, CFErrorRef* e
 }
 
 @end
-

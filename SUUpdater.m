@@ -95,7 +95,7 @@ static void *SUUpdaterDefaultsObservationContext = &SUUpdaterDefaultsObservation
 	// Saving-the-developer-from-a-stupid-mistake-check:
 	BOOL hasPublicDSAKey = [host publicDSAKey] != nil;
 	BOOL isMainBundle = [bundle isEqualTo:[NSBundle mainBundle]];
-	BOOL hostIsCodeSigned = [SUCodeSigningVerifier hostApplicationIsCodeSigned];
+	BOOL hostIsCodeSigned = ([[SUCodeSigningVerifier alloc] init] != nil);
 	if (!isMainBundle && !hasPublicDSAKey) {
 		[self notifyWillShowModalAlert];
 		NSRunAlertPanel(@"Insecure update error!", @"For security reasons, you need to sign your updates with a DSA key. See Sparkle's documentation for more information.", @"OK", nil, nil);

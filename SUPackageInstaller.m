@@ -7,27 +7,27 @@
 //
 
 #import "SUPackageInstaller.h"
-#import <Cocoa/Cocoa.h>
 #import "SUConstants.h"
+#import "NSURL+SUAdditions.h"
 
 @implementation SUPackageInstaller
 
-+ (void)performInstallationToPath:(NSString *)installationPath fromPath:(NSString *)path host:(SUHost *)host delegate:delegate synchronously:(BOOL)synchronously versionComparator:(id <SUVersionComparison>)comparator
++ (void)performInstallationToURL:(NSURL *)installationURL fromURL:(NSURL *)URL host:(SUHost *)host delegate:(id)delegate synchronously:(BOOL)synchronously versionComparator:(id<SUVersionComparison>)comparator
 {
 	NSString *command;
 	NSArray *args;
-	
+
 	// Run installer using the "open" command to ensure it is launched in front of current application.
 	// -W = wait until the app has quit.
 	// -n = Open another instance if already open.
 	// -b = app bundle identifier
 	command = @"/usr/bin/open";
-	args = [NSArray arrayWithObjects:@"-W", @"-n", @"-b", @"com.apple.installer", path, nil];
-	
+	args = [NSArray arrayWithObjects:@"-W", @"-n", @"-b", @"com.apple.installer", @(URL.su_fileSystemRepresentation), nil];
+
 	if (![[NSFileManager defaultManager] fileExistsAtPath:command]) {
 		NSError *error = [NSError errorWithDomain:SUSparkleErrorDomain code:SUMissingInstallerToolError userInfo:[NSDictionary dictionaryWithObject:@"Couldn't find Apple's installer tool!" forKey:NSLocalizedDescriptionKey]];
 		dispatch_async(dispatch_get_main_queue(), ^{
-			[self finishInstallationToPath:installationPath withResult:NO host:host error:error delegate:delegate];
+			[self finishInstallationToURL:installationURL withResult:NO host:host error:error delegate:delegate];
 		});
 
 		return;
@@ -39,7 +39,7 @@
 
 		// Known bug: if the installation fails or is canceled, Sparkle goes ahead and restarts, thinking everything is fine.
 		dispatch_async(dispatch_get_main_queue(), ^{
-			[self finishInstallationToPath:installationPath withResult:YES host:host error:nil delegate:delegate];
+			[self finishInstallationToURL:installationURL withResult:YES host:host error:nil delegate:delegate];
 		});
 	}};
 

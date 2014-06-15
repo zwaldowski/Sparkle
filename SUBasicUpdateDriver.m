@@ -12,14 +12,13 @@
 #import "SUDSAVerifier.h"
 #import "SUInstaller.h"
 #import "SUStandardVersionComparator.h"
-#import "SUUnarchiver.h"
-#import "SUConstants.h"
 #import "SULog.h"
-#import "SUPlainInstaller.h"
-#import "SUPlainInstallerInternals.h"
 #import "SUBinaryDeltaCommon.h"
 #import "SUCodeSigningVerifier.h"
 #import "SUUpdater_Private.h"
+
+#import "NSFileManager+SUAdditions.h"
+#import "NSURL+SUAdditions.h"
 
 #ifdef FINISH_INSTALL_TOOL_NAME
     // FINISH_INSTALL_TOOL_NAME expands to unquoted finish_install
@@ -34,6 +33,19 @@
 	SUAppcast *appcast;
 	SUUnarchiver *unarchiver;
 	BOOL _restartPostponed;
+
+	NSFileManager *_fileManager;
+	NSURL *_tempURL;
+	NSURL *_relaunchURL;
+}
+
+- initWithUpdater:(SUUpdater *)theUpdater {
+	self = [super initWithUpdater:theUpdater];
+	if (!self) return nil;
+
+	_fileManager = [[NSFileManager alloc] init];
+
+	return self;
 }
 
 - (void)checkForUpdatesAtURL:(NSURL *)URL host:(SUHost *)aHost
@@ -178,46 +190,41 @@
 - (void)download:(NSURLDownload *)d decideDestinationWithSuggestedFilename:(NSString *)name
 {
 	NSString *downloadFileName = [NSString stringWithFormat:@"%@ %@", [host name], [updateItem versionString]];
-    
-    
-	tempDir = [[host appSupportPath] stringByAppendingPathComponent:downloadFileName];
-	int cnt=1;
-	while ([[NSFileManager defaultManager] fileExistsAtPath:tempDir] && cnt <= 999)
-	{
-		tempDir = [[host appSupportPath] stringByAppendingPathComponent:[NSString stringWithFormat:@"%@ %d", downloadFileName, cnt++]];
-	}
-	
+
+	NSURL *tempURL = SUUniqueURLInDirectory(host.appSupportURL, downloadFileName, nil);
+
     // Create the temporary directory if necessary.
-	BOOL success = [[NSFileManager defaultManager] createDirectoryAtPath:tempDir withIntermediateDirectories:YES attributes:nil error:NULL];
+	BOOL success = [_fileManager createDirectoryAtPath:tempURL.path withIntermediateDirectories:YES attributes:nil error:NULL];
 	if (!success)
 	{
 		// Okay, something's really broken with this user's file structure.
 		[download cancel];
-		[self abortUpdateWithError:[NSError errorWithDomain:SUSparkleErrorDomain code:SUTemporaryDirectoryError userInfo:[NSDictionary dictionaryWithObject:[NSString stringWithFormat:@"Can't make a temporary directory for the update download at %@.",tempDir] forKey:NSLocalizedDescriptionKey]]];
+		[self abortUpdateWithError:[NSError errorWithDomain:SUSparkleErrorDomain code:SUTemporaryDirectoryError userInfo:[NSDictionary dictionaryWithObject:[NSString stringWithFormat:@"Can't make a temporary directory for the update download at %@.", tempURL] forKey:NSLocalizedDescriptionKey]]];
 	}
 
-	downloadPath = [tempDir stringByAppendingPathComponent:name];
+	_tempURL = tempURL;
+	downloadPath = [tempURL.path stringByAppendingPathComponent:name];
 	[download setDestination:downloadPath allowOverwrite:YES];
 }
 
-- (BOOL)validateUpdateDownloadedToPath:(NSString *)downloadedPath extractedToPath:(NSString *)extractedPath DSASignature:(NSString *)DSASignature publicDSAKey:(NSString *)publicDSAKey
+- (BOOL)validateUpdateDownloadedToURL:(NSURL *)downloadedURL extractedToURL:(NSURL *)extractedURL DSASignature:(NSData *)DSASignature publicDSAKey:(NSString *)publicDSAKey
 {
-    NSString *newBundlePath = [SUInstaller appPathInUpdateFolder:extractedPath forHost:host];
-    if (newBundlePath)
-    {
-        NSError *error = nil;
-        if ([SUCodeSigningVerifier codeSignatureIsValidAtPath:newBundlePath error:&error]) {
-            return YES;
-        } else {
-            SULog(@"Code signature check on update failed: %@", error);
-        }
-    }
-    
-    return [SUDSAVerifier validatePath:downloadedPath withEncodedDSASignature:DSASignature withPublicDSAKey:publicDSAKey];
+	NSURL *newBundleURL = [SUInstaller appURLInUpdateFolder:extractedURL forHost:host];
+	if (newBundleURL)
+	{
+		NSError *error = nil;
+		if ([SUCodeSigningVerifier.new verifyBundleAtURL:newBundleURL error:&error]) {
+			return YES;
+		} else {
+			SULog(@"Code signature check on update failed: %@", error);
+		}
+	}
+
+	return [[[SUDSAVerifier alloc] initWithPublicKeyString:publicDSAKey] verifyURL:downloadedURL signature:DSASignature];
 }
 
 - (void)downloadDidFinish:(NSURLDownload *)d
-{	
+{
 	[self extractUpdate];
 }
 
@@ -282,11 +289,15 @@
 	[self installWithToolAndRelaunch:relaunch displayingUserInterface:relaunch];
 }
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
 - (void)installWithToolAndRelaunch:(BOOL)relaunch displayingUserInterface:(BOOL)showUI
 {
+	NSFileManager *fm = [[NSFileManager alloc] init];
+	NSURL *downloadURL = [NSURL fileURLWithPath:downloadPath];
+
 #if !ENDANGER_USERS_WITH_INSECURE_UPDATES
-    if (![self validateUpdateDownloadedToPath:downloadPath extractedToPath:tempDir DSASignature:[updateItem DSASignature] publicDSAKey:[host publicDSAKey]])
-    {
+    if (![self validateUpdateDownloadedToURL:downloadURL extractedToURL:_tempURL DSASignature:updateItem.DSASignature publicDSAKey:host.publicDSAKey]) {
         [self abortUpdateWithError:[NSError errorWithDomain:SUSparkleErrorDomain code:SUSignatureError userInfo:[NSDictionary dictionaryWithObjectsAndKeys:SULocalizedString(@"An error occurred while extracting the archive. Please try again later.", nil), NSLocalizedDescriptionKey, @"The update is improperly signed.", NSLocalizedFailureReasonErrorKey, nil]]];
         return;
 	}
@@ -326,57 +337,69 @@
 
 	// Copy the relauncher into a temporary directory so we can get to it after the new version's installed.
 	// Only the paranoid survive: if there's already a stray copy of relaunch there, we would have problems.
-	NSString *relaunchPathToCopy = [SUBundle() pathForResource:finishInstallToolName ofType:@"app"];
-	if (relaunchPathToCopy != nil)
+	NSURL *relaunchURLToCopy = [SUBundle() URLForResource:finishInstallToolName withExtension:@"app"];
+	if (relaunchURLToCopy != nil)
 	{
-		NSString *targetPath = [[host appSupportPath] stringByAppendingPathComponent:[relaunchPathToCopy lastPathComponent]];
-		// Only the paranoid survive: if there's already a stray copy of relaunch there, we would have problems.
-		NSError *error = nil;
-		[[NSFileManager defaultManager] createDirectoryAtPath: [targetPath stringByDeletingLastPathComponent] withIntermediateDirectories: YES attributes: [NSDictionary dictionary] error: &error];
+		NSURL *targetParentURL = host.appSupportURL;
+		NSURL *targetURL = [targetParentURL URLByAppendingPathComponent:relaunchURLToCopy.lastPathComponent];
 
-		if( [SUPlainInstaller copyPathWithAuthentication: relaunchPathToCopy overPath: targetPath temporaryName: nil error: &error] )
-			relaunchPath = targetPath;
-		else
-			[self abortUpdateWithError:[NSError errorWithDomain:SUSparkleErrorDomain code:SURelaunchError userInfo:[NSDictionary dictionaryWithObjectsAndKeys:SULocalizedString(@"An error occurred while extracting the archive. Please try again later.", nil), NSLocalizedDescriptionKey, [NSString stringWithFormat:@"Couldn't copy relauncher (%@) to temporary path (%@)! %@", relaunchPathToCopy, targetPath, (error ? [error localizedDescription] : @"")], NSLocalizedFailureReasonErrorKey, nil]]];
+		NSError *error = nil;
+		[fm createDirectoryAtPath:targetParentURL.path withIntermediateDirectories:YES attributes:nil error:&error];
+
+		if ([fm su_copyItemAtURLWithAuthentication:relaunchURLToCopy toURL:targetURL error:&error]) {
+			_relaunchURL = targetURL;
+		} else {
+			[self abortUpdateWithError:[NSError errorWithDomain:SUSparkleErrorDomain code:SURelaunchError userInfo:@{
+				NSLocalizedDescriptionKey: SULocalizedString(@"An error occurred while extracting the archive. Please try again later.", nil),
+				NSLocalizedFailureReasonErrorKey: [NSString stringWithFormat:@"Couldn't copy relauncher (%@) to temporary URL (%@)! %@", relaunchURLToCopy, targetURL, (error ? [error localizedDescription] : @"")],
+			}]];
+		}
 	}
 
     [[NSNotificationCenter defaultCenter] postNotificationName:SUUpdaterWillRestartNotification object:self];
     if ([[updater delegate] respondsToSelector:@selector(updaterWillRelaunchApplication:)])
         [[updater delegate] updaterWillRelaunchApplication:updater];
 
-    if(!relaunchPath || ![[NSFileManager defaultManager] fileExistsAtPath:relaunchPath])
+    if ([_relaunchURL checkResourceIsReachableAndReturnError:NULL])
     {
         // Note that we explicitly use the host app's name here, since updating plugin for Mail relaunches Mail, not just the plugin.
-        [self abortUpdateWithError:[NSError errorWithDomain:SUSparkleErrorDomain code:SURelaunchError userInfo:[NSDictionary dictionaryWithObjectsAndKeys:[NSString stringWithFormat:SULocalizedString(@"An error occurred while relaunching %1$@, but the new version will be available next time you run %1$@.", nil), [host name]], NSLocalizedDescriptionKey, [NSString stringWithFormat:@"Couldn't find the relauncher (expected to find it at %@)", relaunchPath], NSLocalizedFailureReasonErrorKey, nil]]];
+		[self abortUpdateWithError:[NSError errorWithDomain:SUSparkleErrorDomain code:SURelaunchError userInfo:@{
+			NSLocalizedDescriptionKey: [NSString stringWithFormat:SULocalizedString(@"An error occurred while relaunching %1$@, but the new version will be available next time you run %1$@.", nil), [host name]],
+			NSLocalizedFailureReasonErrorKey: [NSString stringWithFormat:@"Couldn't find the relauncher (expected to find it at %@)", _relaunchURL]
+		}]];
         // We intentionally don't abandon the update here so that the host won't initiate another.
         return;
     }
 
-    NSString *pathToRelaunch = [host bundlePath];
-    if ([[updater delegate] respondsToSelector:@selector(pathToRelaunchForUpdater:)])
-        pathToRelaunch = [[updater delegate] pathToRelaunchForUpdater:updater];
-    NSString *relaunchToolPath = [[relaunchPath stringByAppendingPathComponent: @"/Contents/MacOS"] stringByAppendingPathComponent: finishInstallToolName];
-    [NSTask launchedTaskWithLaunchPath: relaunchToolPath arguments:[NSArray arrayWithObjects:
-																	[host bundlePath],
-																	pathToRelaunch,
-																	[NSString stringWithFormat:@"%d", [[NSProcessInfo processInfo] processIdentifier]],
-																	tempDir,
+	NSURL *URLToRelaunch = host.bundleURL;
+	if ([[updater delegate] respondsToSelector:@selector(URLToRelaunchForUpdater:)])
+		URLToRelaunch = [[updater delegate] URLToRelaunchForUpdater:updater];
+	else if ([[updater delegate] respondsToSelector:@selector(pathToRelaunchForUpdater:)])
+		URLToRelaunch = [NSURL fileURLWithPath:[[updater delegate] pathToRelaunchForUpdater:updater]];
+
+	NSString *relaunchToolPath = [[NSBundle bundleWithURL:_relaunchURL] pathForAuxiliaryExecutable:finishInstallToolName];
+
+	[NSTask launchedTaskWithLaunchPath: relaunchToolPath arguments:@[
+																	@(host.bundleURL.su_fileSystemRepresentation),
+																	@(URLToRelaunch.su_fileSystemRepresentation),
+																	[NSString stringWithFormat:@"%d", NSProcessInfo.processInfo.processIdentifier],
+																	@(_tempURL.su_fileSystemRepresentation),
 																	relaunch ? @"1" : @"0",
 																	showUI ? @"1" : @"0",
-																	nil]];
+																	]];
 
     [NSApp terminate:self];
 }
+#pragma clang diagnostic pop
 
 - (void)cleanUpDownload
 {
-    if (tempDir != nil)	// tempDir contains downloadPath, so we implicitly delete both here.
+    if (_tempURL != nil)	 // tempURL contains downloadPath, so we implicitly delete both here.
 	{
-		BOOL		success = NO;
-        NSError	*	error = nil;
-        success = [[NSFileManager defaultManager] removeItemAtPath: tempDir error: &error]; // Clean up the copied relauncher
-		if( !success )
-			[[NSWorkspace sharedWorkspace] performFileOperation:NSWorkspaceRecycleOperation source:[tempDir stringByDeletingLastPathComponent] destination:@"" files:[NSArray arrayWithObject:[tempDir lastPathComponent]] tag:NULL];
+        NSError	*error = nil;
+		if(![_fileManager removeItemAtURL:_tempURL error:&error]) {
+			[NSWorkspace.sharedWorkspace recycleURLs:@[ _tempURL ] completionHandler:NULL];
+		}
 	}
 }
 
@@ -384,7 +407,7 @@
 {
 	if (aHost != host) { return; }
 	NSError	*	dontThrow = nil;
-	[[NSFileManager defaultManager] removeItemAtPath: relaunchPath error: &dontThrow]; // Clean up the copied relauncher
+	[[NSFileManager defaultManager] removeItemAtURL: _relaunchURL error: &dontThrow]; // Clean up the copied relauncher
 	[self abortUpdateWithError:[NSError errorWithDomain:SUSparkleErrorDomain code:SUInstallationError userInfo:[NSDictionary dictionaryWithObjectsAndKeys:SULocalizedString(@"An error occurred while installing the update. Please try again later.", nil), NSLocalizedDescriptionKey, [error localizedDescription], NSLocalizedFailureReasonErrorKey, nil]]];
 }
 

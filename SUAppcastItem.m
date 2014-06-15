@@ -6,11 +6,6 @@
 //  Copyright 2006 Andy Matuschak. All rights reserved.
 //
 
-#import "SUUpdater.h"
-
-#import "SUAppcast.h"
-#import "SUAppcastItem.h"
-#import "SUVersionComparisonProtocol.h"
 #import "SUAppcastItem.h"
 #import "SULog.h"
 
@@ -19,7 +14,7 @@
 @property (copy, readwrite) NSDate *date;
 @property (copy, readwrite) NSString *itemDescription;
 @property (strong, readwrite) NSURL *releaseNotesURL;
-@property (copy, readwrite) NSString *DSASignature;
+@property (copy, readwrite) NSData *DSASignature;
 @property (copy, readwrite) NSString *minimumSystemVersion;
 @property (copy, readwrite) NSString *maximumSystemVersion;
 @property (strong, readwrite) NSURL *fileURL;
@@ -126,8 +121,12 @@
 			NSString *fileURLString = [[enclosureURLString stringByReplacingPercentEscapesUsingEncoding:NSUTF8StringEncoding] stringByAddingPercentEscapesUsingEncoding:NSUTF8StringEncoding];
 			self.fileURL = [NSURL URLWithString:fileURLString];
 		}
-		if( enclosure )
-			self.DSASignature = [enclosure objectForKey:@"sparkle:dsaSignature"];
+
+		if( enclosure ) {
+			NSString *signature = [enclosure objectForKey:@"sparkle:dsaSignature"];
+			NSString *strippedSignature = [signature stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+			self.DSASignature = [[NSData alloc] initWithBase64Encoding:strippedSignature];
+		}
 		
 		self.versionString = newVersion;
 		self.minimumSystemVersion = [dict objectForKey:@"sparkle:minimumSystemVersion"];
@@ -158,7 +157,7 @@
 				NSMutableDictionary *fakeAppCastDict = [dict mutableCopy];
                 [fakeAppCastDict removeObjectForKey:@"deltas"];
                 [fakeAppCastDict setObject:deltaDictionary forKey:@"enclosure"];
-                SUAppcastItem *deltaItem = [[[self class] alloc] initWithDictionary:fakeAppCastDict];
+                SUAppcastItem *deltaItem = [(SUAppcastItem *)[[self class] alloc] initWithDictionary:fakeAppCastDict];
 
                 [deltas setObject:deltaItem forKey:[deltaDictionary objectForKey:@"sparkle:deltaFrom"]];
 			}
@@ -166,11 +165,6 @@
         }
 	}
 	return self;
-}
-
-- (NSDictionary *)propertiesDictionary
-{
-	return propertiesDictionary;
 }
 
 @end

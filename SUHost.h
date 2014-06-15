@@ -11,20 +11,12 @@
 #import "SUVersionComparisonProtocol.h"
 
 @interface SUHost : NSObject
-{
-@private
-	NSBundle *bundle;
-	NSString *defaultsDomain;
-	BOOL usesStandardUserDefaults;
-}
-@property (strong, readonly) NSBundle *bundle;
 
 + (NSString *)systemVersionString;
 
-- (id)initWithBundle:(NSBundle *)aBundle;
-- (NSString *)bundlePath;
-- (NSString *)appSupportPath;
-- (NSString *)installationPath;
+- (instancetype)initWithBundle:(NSBundle *)aBundle;
+@property (nonatomic, readonly) NSBundle *bundle;
+
 @property (nonatomic, readonly) NSURL *bundleURL;
 @property (nonatomic, readonly) NSURL *appSupportURL;
 @property (nonatomic, readonly) NSURL *installationURL;

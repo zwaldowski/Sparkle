@@ -10,136 +10,103 @@
 #import "SUPlainInstaller.h"
 #import "SUPackageInstaller.h"
 #import "SUHost.h"
-#import "SUConstants.h"
 #import "SULog.h"
-
+#import "NSURL+SUAdditions.h"
 
 @implementation SUInstaller
 
-static NSString*	sUpdateFolder = nil;
+static NSURL *sUpdateFolder = nil;
 
-+(NSString*)	updateFolder
++ (NSURL *)updateFolderURL
 {
 	return sUpdateFolder;
 }
 
-+ (BOOL)isAliasFolderAtPath:(NSString *)path
++ (NSURL *)installSourceURLInUpdateFolder:(NSURL *)updateFolder forHost:(SUHost *)host isPackage:(out BOOL *)outIsPackage
 {
-	FSRef fileRef;
-	OSStatus err = noErr;
-	Boolean aliasFileFlag, folderFlag;
-	NSURL *fileURL = [NSURL fileURLWithPath:path];
-	
-	if (FALSE == CFURLGetFSRef((CFURLRef)fileURL, &fileRef))
-		err = coreFoundationUnknownErr;
-	
-	if (noErr == err)
-		err = FSIsAliasFile(&fileRef, &aliasFileFlag, &folderFlag);
-	
-	if (noErr == err)
-		return (BOOL)(aliasFileFlag && folderFlag);
-	else
-		return NO;	
-}
-
-+ (NSString *)installSourcePathInUpdateFolder:(NSString *)inUpdateFolder forHost:(SUHost *)host isPackage:(BOOL *)isPackagePtr
-{
-    // Search subdirectories for the application
-	NSString	*currentFile,
-    *newAppDownloadPath = nil,
-    *bundleFileName = [[host bundlePath] lastPathComponent],
-    *alternateBundleFileName = [[host name] stringByAppendingPathExtension:[[host bundlePath] pathExtension]];
+	NSURL *newAppDownloadURL, *fallbackPackageURL, *currentURL;
+	NSString *bundleFileName = host.bundleURL.lastPathComponent, *alternateBundleFileName = [host.name stringByAppendingPathExtension:host.bundleURL.pathExtension];
 	BOOL isPackage = NO;
-	NSString *fallbackPackagePath = nil;
-	NSDirectoryEnumerator *dirEnum = [[NSFileManager defaultManager] enumeratorAtPath: inUpdateFolder];
-	
-	sUpdateFolder = inUpdateFolder;
-	
-	while ((currentFile = [dirEnum nextObject]))
-	{
-		NSString *currentPath = [inUpdateFolder stringByAppendingPathComponent:currentFile];		
-		if ([[currentFile lastPathComponent] isEqualToString:bundleFileName] ||
-			[[currentFile lastPathComponent] isEqualToString:alternateBundleFileName]) // We found one!
-		{
+
+	sUpdateFolder = updateFolder;
+
+	NSDirectoryEnumerator *enumerator = [[[NSFileManager alloc] init] enumeratorAtURL:updateFolder includingPropertiesForKeys:@[ NSURLIsAliasFileKey ] options:0 errorHandler:NULL];
+	while ((currentURL = enumerator.nextObject)) {
+		if ([currentURL.lastPathComponent isEqual:bundleFileName] || [currentURL.lastPathComponent isEqual:alternateBundleFileName]) {
 			isPackage = NO;
-			newAppDownloadPath = currentPath;
+			newAppDownloadURL = currentURL;
 			break;
-		}
-		else if ([[currentFile pathExtension] isEqualToString:@"pkg"] ||
-				 [[currentFile pathExtension] isEqualToString:@"mpkg"])
-		{
-			if ([[[currentFile lastPathComponent] stringByDeletingPathExtension] isEqualToString:[bundleFileName stringByDeletingPathExtension]])
-			{
+		} else if ([currentURL.pathExtension isEqualToString:@"pkg"] || [currentURL.pathExtension isEqualToString:@"mpkg"]) {
+			if ([currentURL.lastPathComponent.stringByDeletingPathExtension isEqual:bundleFileName.stringByDeletingPathExtension]) {
 				isPackage = YES;
-				newAppDownloadPath = currentPath;
+				newAppDownloadURL = currentURL;
 				break;
 			}
-			else
-			{
-				// Remember any other non-matching packages we have seen should we need to use one of them as a fallback.
-				fallbackPackagePath = currentPath;
-			}
-		}
-		else
-		{
+
+			// Remember any other non-matching packages we have seen should we need to use one of them as a fallback.
+			fallbackPackageURL = currentURL;
+		} else {
 			// Try matching on bundle identifiers in case the user has changed the name of the host app
-			NSBundle *incomingBundle = [NSBundle bundleWithPath:currentPath];
-			if(incomingBundle && [[incomingBundle bundleIdentifier] isEqualToString:[[host bundle] bundleIdentifier]])
-			{
+			if ([[[NSBundle bundleWithURL:currentURL] bundleIdentifier] isEqual:host.bundle.bundleIdentifier]) {
 				isPackage = NO;
-				newAppDownloadPath = currentPath;
+				newAppDownloadURL = currentURL;
 				break;
 			}
 		}
-		
+
 		// Some DMGs have symlinks into /Applications! That's no good!
-		if ([self isAliasFolderAtPath:currentPath])
-			[dirEnum skipDescendents];
+		NSNumber *isAliasValue;
+		[currentURL getResourceValue:&isAliasValue forKey:NSURLIsAliasFileKey error:NULL];
+		if ([isAliasValue boolValue]) {
+			[enumerator skipDescendants];
+		}
 	}
-	
-	// We don't have a valid path. Try to use the fallback package.
-    
-	if (newAppDownloadPath == nil && fallbackPackagePath != nil)
-	{
+
+	// We don't have a valid URL. Try to use the fallback package.
+	if (newAppDownloadURL == nil && fallbackPackageURL != nil) {
 		isPackage = YES;
-		newAppDownloadPath = fallbackPackagePath;
+		newAppDownloadURL = fallbackPackageURL;
 	}
 
-    if (isPackagePtr) *isPackagePtr = isPackage;
-    return newAppDownloadPath;
+	if (outIsPackage) *outIsPackage = isPackage;
+	return newAppDownloadURL;
+
+	return nil;
 }
 
-+ (NSString *)appPathInUpdateFolder:(NSString *)updateFolder forHost:(SUHost *)host
++ (NSURL *)appURLInUpdateFolder:(NSURL *)updateFolder forHost:(SUHost *)host
 {
-    BOOL isPackage = NO;
-    NSString *path = [self installSourcePathInUpdateFolder:updateFolder forHost:host isPackage:&isPackage];
-    return isPackage ? nil : path;
+	BOOL isPackage = NO;
+	NSURL *URL = [self installSourceURLInUpdateFolder:updateFolder forHost:host isPackage:&isPackage];
+	return isPackage ? nil : URL;
 }
 
-+ (void)installFromUpdateFolder:(NSString *)inUpdateFolder overHost:(SUHost *)host installationPath:(NSString *)installationPath delegate:delegate synchronously:(BOOL)synchronously versionComparator:(id <SUVersionComparison>)comparator
++ (void)installFromUpdateFolder:(NSURL *)updateFolder overHost:(SUHost *)host installationURL:(NSURL *)installationURL delegate:(id)delegate synchronously:(BOOL)synchronously versionComparator:(id<SUVersionComparison>)comparator
 {
-    BOOL isPackage = NO;
-	NSString *newAppDownloadPath = [self installSourcePathInUpdateFolder:inUpdateFolder forHost:host isPackage:&isPackage];
-    
-	if (newAppDownloadPath == nil)
+	BOOL isPackage = NO;
+	NSURL *newAppDownloadURL = [self installSourceURLInUpdateFolder:updateFolder forHost:host isPackage:&isPackage];
+
+	if (newAppDownloadURL == nil)
 	{
-		[self finishInstallationToPath:installationPath withResult:NO host:host error:[NSError errorWithDomain:SUSparkleErrorDomain code:SUMissingUpdateError userInfo:[NSDictionary dictionaryWithObject:@"Couldn't find an appropriate update in the downloaded package." forKey:NSLocalizedDescriptionKey]] delegate:delegate];
+		[self finishInstallationToURL:installationURL withResult:NO host:host error:[NSError errorWithDomain:SUSparkleErrorDomain code:SUMissingUpdateError userInfo:@{
+			NSLocalizedDescriptionKey: @"Couldn't find an appropriate update in the downloaded package."
+		}] delegate:delegate];
 	}
 	else
 	{
-		[(isPackage ? [SUPackageInstaller class] : [SUPlainInstaller class]) performInstallationToPath:installationPath fromPath:newAppDownloadPath host:host delegate:delegate synchronously:synchronously versionComparator:comparator];
+		[(isPackage ? [SUPackageInstaller class] : [SUPlainInstaller class]) performInstallationToURL:installationURL fromURL:newAppDownloadURL host:host delegate:delegate synchronously:synchronously versionComparator:comparator];
 	}
 }
 
-+ (void)mdimportInstallationPath:(NSString *)installationPath
++ (void)mdimportInstallationURL:(NSURL *)installationURL
 {
 	// *** GETS CALLED ON NON-MAIN THREAD!
-	
+
 	SULog( @"mdimporting" );
-	
+
 	NSTask *mdimport = [[NSTask alloc] init];
 	[mdimport setLaunchPath:@"/usr/bin/mdimport"];
-	[mdimport setArguments:[NSArray arrayWithObject:installationPath]];
+	[mdimport setArguments:@[ @(installationURL.su_fileSystemRepresentation) ]];
 	@try
 	{
 		[mdimport launch];
@@ -152,16 +119,11 @@ static NSString*	sUpdateFolder = nil;
 	}
 }
 
-
-#define		SUNotifyDictHostKey		@"SUNotifyDictHost"
-#define		SUNotifyDictErrorKey	@"SUNotifyDictError"
-#define		SUNotifyDictDelegateKey	@"SUNotifyDictDelegate"
-
-+ (void)finishInstallationToPath:(NSString *)installationPath withResult:(BOOL)result host:(SUHost *)host error:(NSError *)error delegate:delegate
++ (void)finishInstallationToURL:(NSURL *)installationURL withResult:(BOOL)result host:(SUHost *)host error:(NSError *)error delegate:(id)delegate
 {
 	if (result)
 	{
-		[self mdimportInstallationPath:installationPath];
+		[self mdimportInstallationURL:installationURL];
 		if ([delegate respondsToSelector:@selector(installerFinishedForHost:)]) {
 			dispatch_async(dispatch_get_main_queue(), ^{
 				[delegate installerFinishedForHost:host];
@@ -172,16 +134,10 @@ static NSString*	sUpdateFolder = nil;
 	{
 		if ([delegate respondsToSelector:@selector(installerForHost:failedWithError:)]) {
 			dispatch_async(dispatch_get_main_queue(), ^{
-				[self notifyDelegateOfFailure:[NSDictionary dictionaryWithObjectsAndKeys: host, SUNotifyDictHostKey, error, SUNotifyDictErrorKey, delegate, SUNotifyDictDelegateKey, nil]];
+				[delegate installerForHost:host failedWithError:error];
 			});
 		}
-	}		
-}
-
-
-+(void)	notifyDelegateOfFailure: (NSDictionary*)dict
-{
-	[[dict objectForKey: SUNotifyDictDelegateKey] installerForHost: [dict objectForKey: SUNotifyDictHostKey] failedWithError: [dict objectForKey: SUNotifyDictErrorKey]];
+	}
 }
 
 @end

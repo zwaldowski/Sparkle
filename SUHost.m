@@ -6,25 +6,26 @@
 //
 
 #import "SUHost.h"
-
-#import "SUConstants.h"
 #import "SUSystemProfiler.h"
 #include <sys/mount.h> // For statfs for isRunningOnReadOnlyVolume
 #import "SULog.h"
 
-@interface SUHost ()
-@property (strong, readwrite) NSBundle *bundle;
-@end
+@implementation SUHost {
+@private
+	NSBundle *bundle;
+	NSString *defaultsDomain;
+	BOOL usesStandardUserDefaults;
+}
 
-@implementation SUHost
 @synthesize bundle;
 
 - (id)initWithBundle:(NSBundle *)aBundle
 {
+	if (aBundle == nil) aBundle = [NSBundle mainBundle];
+
 	if ((self = [super init]))
 	{
-		if (aBundle == nil) aBundle = [NSBundle mainBundle];
-        self.bundle = aBundle;
+        bundle = aBundle;
 		if (![bundle bundleIdentifier])
 			SULog(@"Sparkle Error: the bundle being updated at %@ has no CFBundleIdentifier! This will cause preference read/write to not work properly.", bundle);
 
@@ -43,30 +44,9 @@
 	return [NSString stringWithFormat:@"%@ <%@, %@>", self.class, self.bundleURL, self.installationURL];
 }
 
-- (NSString *)bundlePath
-{
-	return [bundle bundlePath];
-}
-
 - (NSURL *)bundleURL
 {
 	return [bundle bundleURL];
-}
-
-- (NSString *)appSupportPath
-{
-    NSArray *appSupportPaths = NSSearchPathForDirectoriesInDomains(NSApplicationSupportDirectory, NSUserDomainMask, YES);
-    NSString *appSupportPath = nil;
-    if (!appSupportPaths || [appSupportPaths count] == 0)
-    {
-        SULog(@"Failed to find app support directory! Using ~/Library/Application Support...");
-        appSupportPath = [@"~/Library/Application Support" stringByExpandingTildeInPath];
-    }
-    else
-        appSupportPath = [appSupportPaths objectAtIndex:0];
-    appSupportPath = [appSupportPath stringByAppendingPathComponent:[self name]];
-    appSupportPath = [appSupportPath stringByAppendingPathComponent:@".Sparkle"];
-    return appSupportPath;
 }
 
 - (NSURL *)appSupportURL
@@ -77,20 +57,9 @@
 		SULog(@"Failed to find app support directory! Using ~/Library/Application Support...");
 		appSupportURL = [NSURL fileURLWithPath:[@"~/Library/Application Support" stringByExpandingTildeInPath]];
 	}
-	appSupportURL = [appSupportURL URLByAppendingPathComponent:self.name isDirectory:YES];
-	appSupportURL = [appSupportURL URLByAppendingPathComponent:@".Sparkle" isDirectory:YES];
+	appSupportURL = [appSupportURL URLByAppendingPathComponent:self.name];
+	appSupportURL = [appSupportURL URLByAppendingPathComponent:@".Sparkle"];
 	return appSupportURL;
-}
-
-- (NSString *)installationPath
-{
-#if NORMALIZE_INSTALLED_APP_NAME
-	// We'll install to "#{CFBundleName}.app", but only if that path doesn't already exist. If we're "Foo 4.2.app," and there's a "Foo.app" in this directory, we don't want to overwrite it! But if there's no "Foo.app," we'll take that name.
-	NSString *normalizedAppPath = [[[bundle bundlePath] stringByDeletingLastPathComponent] stringByAppendingPathComponent: [NSString stringWithFormat: @"%@.%@", [bundle objectForInfoDictionaryKey:@"CFBundleName"], [[bundle bundlePath] pathExtension]]];
-	if (![[NSFileManager defaultManager] fileExistsAtPath:[[[bundle bundlePath] stringByDeletingLastPathComponent] stringByAppendingPathComponent: [NSString stringWithFormat: @"%@.%@", [bundle objectForInfoDictionaryKey:@"CFBundleName"], [[bundle bundlePath] pathExtension]]]])
-		return normalizedAppPath;
-#endif
-	return [bundle bundlePath];
 }
 
 - (NSURL *)installationURL
@@ -99,7 +68,7 @@
 	// We'll install to "#{CFBundleName}.app", but only if that path doesn't already exist. If we're "Foo 4.2.app," and there's a "Foo.app" in this directory, we don't want to overwrite it! But if there's no "Foo.app," we'll take that name.
 	NSURL *bundleURL = bundle.bundleURL;
 	NSString *name = [bundle objectForInfoDictionaryKey:(__bridge id)kCFBundleNameKey];
-	NSURL *normalizedAppURL = [[bundleURL.URLByDeletingLastPathComponent URLByAppendingPathComponent:name isDirectory:YES] URLByAppendingPathExtension:bundleURL.pathExtension];
+	NSURL *normalizedAppURL = [[bundleURL.URLByDeletingLastPathComponent URLByAppendingPathComponent:name] URLByAppendingPathExtension:bundleURL.pathExtension];
 	if (![normalizedAppURL checkResourceIsReachableAndReturnError:NULL]) {
 		return normalizedAppURL;
 	}
@@ -161,7 +130,7 @@
 {
 	struct statfs statfs_info;
 	statfs([[bundle bundlePath] fileSystemRepresentation], &statfs_info);
-	return (statfs_info.f_flags & MNT_RDONLY);
+	return (statfs_info.f_flags & MNT_RDONLY) != 0;
 }
 
 - (BOOL)isBackgroundApplication
@@ -205,7 +174,7 @@
 	if (usesStandardUserDefaults)
 		return [[NSUserDefaults standardUserDefaults] objectForKey:defaultName];
 	
-	CFPropertyListRef obj = CFPreferencesCopyAppValue((CFStringRef)defaultName, (CFStringRef)defaultsDomain);
+	CFPropertyListRef obj = CFPreferencesCopyAppValue((__bridge CFStringRef)defaultName, (__bridge CFStringRef)defaultsDomain);
 	return (__bridge_transfer id)obj;
 }
 
@@ -217,8 +186,8 @@
 	}
 	else
 	{
-		CFPreferencesSetValue((CFStringRef)defaultName, (__bridge CFPropertyListRef)value, (CFStringRef)defaultsDomain,  kCFPreferencesCurrentUser,  kCFPreferencesAnyHost);
-		CFPreferencesSynchronize((CFStringRef)defaultsDomain, kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
+		CFPreferencesSetValue((__bridge CFStringRef)defaultName, (__bridge CFPropertyListRef)value, (__bridge CFStringRef)defaultsDomain,  kCFPreferencesCurrentUser,  kCFPreferencesAnyHost);
+		CFPreferencesSynchronize((__bridge CFStringRef)defaultsDomain, kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
 	}
 }
 
@@ -228,7 +197,7 @@
 		return [[NSUserDefaults standardUserDefaults] boolForKey:defaultName];
 	
 	BOOL value;
-	CFPropertyListRef plr = CFPreferencesCopyAppValue((CFStringRef)defaultName, (CFStringRef)defaultsDomain);
+	CFPropertyListRef plr = CFPreferencesCopyAppValue((__bridge CFStringRef)defaultName, (__bridge CFStringRef)defaultsDomain);
 	if (plr == NULL)
 		value = NO;
 	else
@@ -247,8 +216,8 @@
 	}
 	else
 	{
-		CFPreferencesSetValue((CFStringRef)defaultName, (CFBooleanRef)[NSNumber numberWithBool:value], (CFStringRef)defaultsDomain,  kCFPreferencesCurrentUser,  kCFPreferencesAnyHost);
-		CFPreferencesSynchronize((CFStringRef)defaultsDomain, kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
+		CFPreferencesSetValue((__bridge CFStringRef)defaultName, (__bridge CFBooleanRef)[NSNumber numberWithBool:value], (__bridge CFStringRef)defaultsDomain,  kCFPreferencesCurrentUser,  kCFPreferencesAnyHost);
+		CFPreferencesSynchronize((__bridge CFStringRef)defaultsDomain, kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
 	}
 }
 

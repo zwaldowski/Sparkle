@@ -7,45 +7,42 @@
 //
 
 #import "SUPlainInstaller.h"
-#import "SUPlainInstallerInternals.h"
-#import "SUConstants.h"
 #import "SUHost.h"
+
+#import "NSFileManager+SUAdditions.h"
 
 @implementation SUPlainInstaller
 
-+ (void)performInstallationToPath:(NSString *)installationPath fromPath:(NSString *)path host:(SUHost *)host delegate:delegate synchronously:(BOOL)synchronously versionComparator:(id <SUVersionComparison>)comparator
++ (void)performInstallationToURL:(NSURL *)installationURL fromURL:(NSURL *)URL host:(SUHost *)host delegate:delegate synchronously:(BOOL)synchronously versionComparator:(id <SUVersionComparison>)comparator
 {
 	// Prevent malicious downgrades:
-	#if !PERMIT_AUTOMATED_DOWNGRADES
-	if ([comparator compareVersion:[host version] toVersion:[[NSBundle bundleWithPath:path] objectForInfoDictionaryKey:@"CFBundleVersion"]] == NSOrderedDescending)
+#if !PERMIT_AUTOMATED_DOWNGRADES
+	NSString *version = [[NSBundle bundleWithURL:URL] objectForInfoDictionaryKey:(__bridge id)kCFBundleVersionKey];
+	if ([comparator compareVersion:[host version] toVersion:version] == NSOrderedDescending)
 	{
-		NSString * errorMessage = [NSString stringWithFormat:@"Sparkle Updater: Possible attack in progress! Attempting to \"upgrade\" from %@ to %@. Aborting update.", [host version], [[NSBundle bundleWithPath:path] objectForInfoDictionaryKey:@"CFBundleVersion"]];
+		NSString * errorMessage = [NSString stringWithFormat:@"Sparkle Updater: Possible attack in progress! Attempting to \"upgrade\" from %@ to %@. Aborting update.", host.version, version];
 		NSError *error = [NSError errorWithDomain:SUSparkleErrorDomain code:SUDowngradeError userInfo:[NSDictionary dictionaryWithObject:errorMessage forKey:NSLocalizedDescriptionKey]];
-		[self finishInstallationToPath:installationPath withResult:NO host:host error:error delegate:delegate];
+		[self finishInstallationToURL:installationURL withResult:NO host:host error:error delegate:delegate];
 		return;
 	}
-	#endif
-    
-    NSString *targetPath = [host installationPath];
-    NSString *tempName = [self temporaryNameForPath:targetPath];
+#endif
 
 	void(^block)(void) = ^{ @autoreleasepool {
-
+		NSFileManager *fm = [[NSFileManager alloc] init];
 		NSError *error = nil;
 
-		NSString *oldPath = [host bundlePath];
-		BOOL result = [self copyPathWithAuthentication:path overPath:installationPath temporaryName:tempName error:&error];
+		NSURL *oldURL = host.bundleURL;
 
+		BOOL result = [fm su_copyItemAtURLWithAuthentication:URL toURL:installationURL error:&error];
 		if (result) {
-			BOOL haveOld = [[NSFileManager defaultManager] fileExistsAtPath: oldPath];
-			BOOL differentFromNew = ![oldPath isEqualToString: installationPath];
-			if (haveOld && differentFromNew)
-				[self _movePathToTrash: oldPath];	// On success, trash old copy if there's still one due to renaming.
+			if ([oldURL checkResourceIsReachableAndReturnError:NULL] && ![oldURL isEqual: installationURL]) {
+				[fm su_moveItemAtURLToTrash:oldURL];
+			}
 			error = nil;
 		}
 
 		dispatch_async(dispatch_get_main_queue(), ^{
-			[self finishInstallationToPath:installationPath withResult:result host:host error:error delegate:delegate];
+			[self finishInstallationToURL:installationURL withResult:result host:host error:error delegate:delegate];
 		});
 	}};
 

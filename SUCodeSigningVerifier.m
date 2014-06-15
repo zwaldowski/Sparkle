@@ -6,94 +6,95 @@
 //
 //
 
-#include <Security/CodeSigning.h>
-#include <Security/SecCode.h>
 #import "SUCodeSigningVerifier.h"
 #import "SULog.h"
 
-@implementation SUCodeSigningVerifier
+@implementation SUCodeSigningVerifier {
+	SecCodeRef _hostCode;
+	SecRequirementRef _requirement;
+}
 
-+ (BOOL)codeSignatureIsValidAtPath:(NSString *)destinationPath error:(out NSError **)outError
+- (void)dealloc
 {
-    OSStatus result;
-	__block SecRequirementRef requirement = NULL;
-	__block SecStaticCodeRef staticCode = NULL;
+	if (_hostCode) CFRelease(_hostCode);
+	if (_requirement) CFRelease(_requirement);
+}
+
+- (instancetype)init
+{
+	self = [super init];
+	if (!self) return nil;
+
+	OSStatus result;
 	__block SecCodeRef hostCode = NULL;
+	__block SecRequirementRef requirement = NULL;
 
-	if (outError) {
-		*outError = nil;
-	}
-
-	BOOL(^cleanup)(void) = ^{
-		if (requirement) {
-			CFRelease(requirement);
-			requirement = NULL;
-		}
-
-		if (staticCode) {
-			CFRelease(staticCode);
-			staticCode = NULL;
-		}
-
+	id(^cleanup)(void) = ^id{
 		if (hostCode) {
 			CFRelease(hostCode);
 			hostCode = NULL;
 		}
 
+		if (requirement) {
+			CFRelease(requirement);
+			requirement = NULL;
+		}
+
+		return nil;
+	};
+
+	result = SecCodeCopySelf(kSecCSDefaultFlags, &hostCode);
+	if (result != noErr) {
+		SULog(@"Failed to copy host code %d", result);
+		return (self = cleanup());
+	}
+
+	result = SecCodeCopyDesignatedRequirement(hostCode, kSecCSDefaultFlags, &requirement);
+	if (result != noErr) {
+		SULog(@"Failed to copy designated requirement %d", result);
+		return (self = cleanup());
+	}
+
+	return self;
+}
+
+- (BOOL)verifyBundleAtURL:(NSURL *)URL error:(out NSError **)outError
+{
+	NSBundle *bundle = [NSBundle bundleWithURL:URL];
+	return [self verifyBundle:bundle error:outError];
+}
+
+- (BOOL)verifyBundle:(NSBundle *)bundle error:(out NSError **)outError
+{
+	if (outError) *outError = nil;
+	if (!bundle) return NO;
+
+	OSStatus result;
+	__block SecStaticCodeRef staticCode = NULL;
+	__block CFErrorRef error = NULL;
+
+	BOOL(^cleanup)(void) = ^{
+		if (staticCode) CFRelease(staticCode);
+		if (error) CFRelease(error);
 		return NO;
 	};
-    
-    result = SecCodeCopySelf(kSecCSDefaultFlags, &hostCode);
-    if (result != 0) {
-        SULog(@"Failed to copy host code %d", result);
-		return cleanup();
-    }
-    
-    result = SecCodeCopyDesignatedRequirement(hostCode, kSecCSDefaultFlags, &requirement);
-    if (result != 0) {
-        SULog(@"Failed to copy designated requirement %d", result);
-		return cleanup();
-    }
-    
-    NSBundle *newBundle = [NSBundle bundleWithPath:destinationPath];
-    if (!newBundle) {
-        SULog(@"Failed to load NSBundle for update");
+
+	result = SecStaticCodeCreateWithPath((__bridge CFURLRef)bundle.executableURL, kSecCSDefaultFlags, &staticCode);
+	if (result != noErr) {
+		SULog(@"Failed to get static code %d", result);
 		return cleanup();
 	}
 
-	result = SecStaticCodeCreateWithPath((__bridge CFURLRef)[newBundle executableURL], kSecCSDefaultFlags, &staticCode);
-	if (result != 0) {
-		SULog(@"Failed to get static code %d", result);
-		return cleanup();
-    }
-    
-	CFErrorRef error = NULL;
-	result = SecStaticCodeCheckValidityWithErrors(staticCode, kSecCSDefaultFlags | kSecCSCheckAllArchitectures, requirement, &error);
+	result = SecStaticCodeCheckValidityWithErrors(staticCode, kSecCSDefaultFlags | kSecCSCheckAllArchitectures, _requirement, &error);
 	if (result != noErr) {
 		if (outError) {
-			*outError = CFBridgingRelease(error);
-		} else {
-			CFRelease(error);
+			*outError = CFRetain(error);
 		}
+		return cleanup();
 	}
 
 	cleanup();
-
-	return (result == noErr);
-}
-
-+ (BOOL)hostApplicationIsCodeSigned
-{
-    OSStatus result;
-    SecCodeRef hostCode = NULL;
-    result = SecCodeCopySelf(kSecCSDefaultFlags, &hostCode);
-    if (result != 0) return NO;
-    
-    SecRequirementRef requirement = NULL;
-    result = SecCodeCopyDesignatedRequirement(hostCode, kSecCSDefaultFlags, &requirement);
-    if (hostCode) CFRelease(hostCode);
-    if (requirement) CFRelease(requirement);
-    return (result == 0);
+	return YES;
 }
 
 @end

@@ -19,13 +19,10 @@
 
 @interface SUDSAVerifier : NSObject
 
-+ (BOOL)validatePath:(NSString *)path withEncodedDSASignature:(NSString *)encodedSignature withPublicDSAKey:(NSString *)pkeyString;
-
 - (instancetype)initWithPublicKeyData:(NSData *)data;
 - (instancetype)initWithPublicKeyString:(NSString *)string;
 
 - (BOOL)verifyURL:(NSURL *)URL signature:(NSData *)signature;
-- (BOOL)verifyFileAtPath:(NSString *)path signature:(NSData *)signature;
 - (BOOL)verifyStream:(NSInputStream *)stream signature:(NSData *)signature;
 
 @end
