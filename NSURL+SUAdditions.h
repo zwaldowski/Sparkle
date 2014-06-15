@@ -13,7 +13,7 @@
 - (instancetype)su_initFileURLWithFileSystemRepresentation:(const char *)path isDirectory:(BOOL)isDir relativeToURL:(NSURL *)baseURL __attribute__((objc_method_family(init)));
 + (NSURL *)su_fileURLWithFileSystemRepresentation:(const char *)path isDirectory:(BOOL) isDir relativeToURL:(NSURL *)baseURL __attribute__((objc_method_family(new)));
 
-@property (readonly) const char *fileSystemRepresentation NS_RETURNS_INNER_POINTER;
+@property (readonly) const char *su_fileSystemRepresentation NS_RETURNS_INNER_POINTER;
 - (BOOL)su_getFileSystemRepresentation:(char *)buffer maxLength:(NSUInteger)maxBufferLength;
 
 @end
