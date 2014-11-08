@@ -13,7 +13,48 @@
 
 @implementation SUPipedUnarchiver
 
-+ (SEL)selectorConformingToTypeOfPath:(NSString *)path
+static const CFStringRef SUTypeTarArchive = CFSTR("public.tar-archive");
+
++ (NSString *)commandForURL:(NSURL *)URL
+{
+    NSString *UTI = nil;
+    if (![URL getResourceValue:&UTI forKey:NSURLTypeIdentifierKey error:NULL]) {
+        return nil;
+    }
+    return UTI;
+}
+
++ (NSString *)commandConformingToType:(NSString *)UTI
+{
+    static dispatch_once_t onceToken;
+    static NSDictionary *commandDictionary;
+    dispatch_once(&onceToken, ^{
+        commandDictionary = @{
+            (__bridge id)kUTTypeZipArchive: @"ditto -x -k - \"$DESTINATION\"",
+            (__bridge id)kUTTypeBzip2Archive: @"tar -jxC \"$DESTINATION\"",
+            (__bridge id)kUTTypeGNUZipArchive: @"tar -zxC \"$DESTINATION\"",
+            (__bridge id)SUTypeTarArchive: @"tar -xC \"$DESTINATION\""
+        };
+    });
+    
+    __block NSString *ret = nil;
+    if ((ret = commandDictionary[UTI])) {
+        return ret;
+    }
+    
+    [commandDictionary enumerateKeysAndObjectsUsingBlock:^(NSString *type, NSString *command, BOOL *stop) {
+        if (!UTTypeConformsTo((__bridge CFStringRef)UTI, (__bridge CFStringRef)type)) {
+            return;
+        }
+        
+        ret = command;
+        *stop = YES;
+    }];
+    
+    return ret;
+}
+
++ (SEL)selectorConformingToTypeOfPath:(NSString *)path DEPRECATED_ATTRIBUTE
 {
     static NSDictionary *typeSelectorDictionary;
     if (!typeSelectorDictionary)
@@ -36,12 +77,17 @@
 
 - (void)start
 {
-    [NSThread detachNewThreadSelector:[[self class] selectorConformingToTypeOfPath:self.archivePath] toTarget:self withObject:nil];
+    NSURL *URL = [NSURL fileURLWithPath:self.archivePath];
+    NSString *command = [self.class commandForURL:URL];
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        [self extractArchivePipingDataToCommand:command];
+    });
 }
 
 + (BOOL)canUnarchivePath:(NSString *)path
 {
-    return ([self selectorConformingToTypeOfPath:path] != nil);
+    NSURL *URL = [NSURL fileURLWithPath:path];
+    return ([self commandForURL:URL] != nil);
 }
 
 // This method abstracts the types that use a command line tool piping data from stdin.
@@ -113,34 +159,6 @@
         else
             unsetenv("DESTINATION");
     }
-}
-
-- (void)extractTAR
-{
-    // *** GETS CALLED ON NON-MAIN THREAD!!!
-
-    [self extractArchivePipingDataToCommand:@"tar -xC \"$DESTINATION\""];
-}
-
-- (void)extractTGZ
-{
-    // *** GETS CALLED ON NON-MAIN THREAD!!!
-
-    [self extractArchivePipingDataToCommand:@"tar -zxC \"$DESTINATION\""];
-}
-
-- (void)extractTBZ
-{
-    // *** GETS CALLED ON NON-MAIN THREAD!!!
-
-    [self extractArchivePipingDataToCommand:@"tar -jxC \"$DESTINATION\""];
-}
-
-- (void)extractZIP
-{
-    // *** GETS CALLED ON NON-MAIN THREAD!!!
-
-    [self extractArchivePipingDataToCommand:@"ditto -x -k - \"$DESTINATION\""];
 }
 
 + (void)load
