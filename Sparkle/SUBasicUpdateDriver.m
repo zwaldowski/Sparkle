@@ -334,15 +334,29 @@
     // Give the host app an opportunity to postpone the install and relaunch.
     static BOOL postponedOnce = NO;
     id<SUUpdaterDelegate> updaterDelegate = [self.updater delegate];
-    if (!postponedOnce && [updaterDelegate respondsToSelector:@selector(updater:shouldPostponeRelaunchForUpdate:untilInvoking:)])
+    if (!postponedOnce)
     {
-        NSInvocation *invocation = [NSInvocation invocationWithMethodSignature:[[self class] instanceMethodSignatureForSelector:@selector(installWithToolAndRelaunch:)]];
-        [invocation setSelector:@selector(installWithToolAndRelaunch:)];
-        [invocation setArgument:&relaunch atIndex:2];
-        [invocation setTarget:self];
-        postponedOnce = YES;
-        if ([updaterDelegate updater:self.updater shouldPostponeRelaunchForUpdate:self.updateItem untilInvoking:invocation]) {
-            return;
+        if ([updaterDelegate respondsToSelector:@selector(updater:shouldPostponeRelaunchForUpdate:completionHandler:)]) {
+            postponedOnce = YES;
+            
+            if ([updaterDelegate updater:self.updater shouldPostponeRelaunchForUpdate:self.updateItem completionHandler:^{
+                [self installWithToolAndRelaunch:NO];
+            }]) {
+                return;
+            }
+
+        } else if ([updaterDelegate respondsToSelector:@selector(updater:shouldPostponeRelaunchForUpdate:untilInvoking:)]) {
+            NSInvocation *invocation = [NSInvocation invocationWithMethodSignature:[[self class] instanceMethodSignatureForSelector:@selector(installWithToolAndRelaunch:)]];
+            [invocation setSelector:@selector(installWithToolAndRelaunch:)];
+            [invocation setArgument:&relaunch atIndex:2];
+            [invocation setTarget:self];
+            postponedOnce = YES;
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+            if ([updaterDelegate updater:self.updater shouldPostponeRelaunchForUpdate:self.updateItem untilInvoking:invocation]) {
+                return;
+            }
+#pragma clang diagnostic pop
         }
     }
 

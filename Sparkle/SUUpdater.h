@@ -219,6 +219,9 @@ SU_EXPORT extern NSString *const SUUpdaterAppcastNotificationKey;
 
     This is not called if the user didn't relaunch on the previous update,
     in that case it will immediately restart.
+ 
+    If both this and the block version below are implemented, the block version
+    will be used instead.
 
     \param updater The SUUpdater instance.
     \param item The appcast item corresponding to the update that is proposed to be installed.
@@ -226,7 +229,22 @@ SU_EXPORT extern NSString *const SUUpdaterAppcastNotificationKey;
 
     \return \c YES to delay the relaunch until \p invocation is invoked.
  */
-- (BOOL)updater:(SUUpdater *)updater shouldPostponeRelaunchForUpdate:(SUAppcastItem *)item untilInvoking:(NSInvocation *)invocation;
+- (BOOL)updater:(SUUpdater *)updater shouldPostponeRelaunchForUpdate:(SUAppcastItem *)item untilInvoking:(NSInvocation *)invocation DEPRECATED_ATTRIBUTE;
+
+/*!
+    Returns whether the relaunch should be delayed in order to perform other tasks.
+
+    This is not called if the user didn't relaunch on the previous update,
+    in that case it will immediately restart.
+
+    \param updater The SUUpdater instance.
+    \param update The appcast item corresponding to the update that is proposed to be installed.
+    \param handler A callback to continue with the relaunch.
+
+    \return \c YES to delay the relaunch until \p handler is called.
+ */
+- (BOOL)updater:(SUUpdater *)updater shouldPostponeRelaunchForUpdate:(SUAppcastItem *)update completionHandler:(void(^)(void))handler;
+
 
 /*!
     Returns whether the application should be relaunched at all.
@@ -297,12 +315,24 @@ SU_EXPORT extern NSString *const SUUpdaterAppcastNotificationKey;
 
 /*!
     Called when an update is scheduled to be silently installed on quit.
+ 
+    If both this and the block version below are implemented, the block version
+    will be used instead.
 
     \param updater The SUUpdater instance.
     \param item The appcast item corresponding to the update that is proposed to be installed.
     \param invocation Can be used to trigger an immediate silent install and relaunch.
  */
-- (void)updater:(SUUpdater *)updater willInstallUpdateOnQuit:(SUAppcastItem *)item immediateInstallationInvocation:(NSInvocation *)invocation;
+- (void)updater:(SUUpdater *)updater willInstallUpdateOnQuit:(SUAppcastItem *)item immediateInstallationInvocation:(NSInvocation *)invocation DEPRECATED_ATTRIBUTE;
+
+/*!
+    Called when an update is scheduled to be silently installed on quit.
+
+    \param updater The SUUpdater instance.
+    \param item The appcast item corresponding to the update that is proposed to be installed.
+    \param handler Can be used to trigger an immediate silent install and relaunch.
+ */
+- (void)updater:(SUUpdater *)updater willInstallUpdateOnQuit:(SUAppcastItem *)item immediateInstallHandler:(void(^)(void))handler;
 
 /*!
     Calls after an update that was scheduled to be silently installed on quit has been canceled.

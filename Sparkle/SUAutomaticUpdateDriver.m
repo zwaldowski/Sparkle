@@ -68,10 +68,13 @@ static const NSTimeInterval SUAutomaticUpdatePromptImpatienceTimer = 60 * 60 * 2
     [processInfo disableSuddenTermination];
 
     self.willUpdateOnTermination = YES;
-
+    
     id<SUUpdaterDelegate> updaterDelegate = [self.updater delegate];
-    if ([updaterDelegate respondsToSelector:@selector(updater:willInstallUpdateOnQuit:immediateInstallationInvocation:)])
-    {
+    if ([updaterDelegate respondsToSelector:@selector(updater:willInstallUpdateOnQuit:immediateInstallHandler:)]) {
+        [updaterDelegate updater:self.updater willInstallUpdateOnQuit:self.updateItem immediateInstallHandler:^{
+            [self installWithToolAndRelaunch:YES displayingUserInterface:NO];
+        }];
+    } else if ([updaterDelegate respondsToSelector:@selector(updater:willInstallUpdateOnQuit:immediateInstallationInvocation:)]) {
         BOOL relaunch = YES;
         BOOL showUI = NO;
         NSInvocation *invocation = [NSInvocation invocationWithMethodSignature:[[self class] instanceMethodSignatureForSelector:@selector(installWithToolAndRelaunch:displayingUserInterface:)]];
@@ -80,7 +83,10 @@ static const NSTimeInterval SUAutomaticUpdatePromptImpatienceTimer = 60 * 60 * 2
         [invocation setArgument:&showUI atIndex:3];
         [invocation setTarget:self];
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
         [updaterDelegate updater:self.updater willInstallUpdateOnQuit:self.updateItem immediateInstallationInvocation:invocation];
+#pragma clang diagnostic pop
     }
 
     // If this is marked as a critical update, we'll prompt the user to install it right away.
