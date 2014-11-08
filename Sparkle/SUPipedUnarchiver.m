@@ -95,34 +95,60 @@ static const CFStringRef SUTypeTarArchive = CFSTR("public.tar-archive");
 {
     // *** GETS CALLED ON NON-MAIN THREAD!!!
 	@autoreleasepool {
-        FILE *fp = NULL, *cmdFP = NULL;
-        char *oldDestinationString = NULL;
-        // We have to declare these before a goto to prevent an error under ARC.
-        // No, we cannot have them in the dispatch_async calls, as the goto "jump enters
-        // lifetime of block which strongly captures a variable"
-        dispatch_block_t delegateSuccess = ^{
-            [self notifyDelegateOfSuccess];
+        __block FILE *fp = NULL, *cmdFP = NULL;
+        __block char *oldDestinationString = NULL;
+        
+        void(^cleanup)(void) = ^{
+            if (fp) {
+                fclose(fp);
+                fp = NULL;
+            }
+            
+            if (cmdFP) {
+                pclose(cmdFP);
+                cmdFP = NULL;
+            }
+            
+            if (oldDestinationString) {
+                setenv("DESTINATION", oldDestinationString, 1);
+            } else {
+                unsetenv("DESTINATION");
+            }
         };
-        dispatch_block_t delegateFailure = ^{
-            [self notifyDelegateOfFailure];
+        
+        void (^reportError)(void) = ^{
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [self notifyDelegateOfFailure];
+            });
+            
+            cleanup();
         };
 
         SULog(@"Extracting %@ using '%@'", self.archivePath, command);
 
         // Get the file size.
         NSNumber *fs = [[NSFileManager defaultManager] attributesOfItemAtPath:self.archivePath error:nil][NSFileSize];
-		if (fs == nil) goto reportError;
+        if (fs == nil) {
+            reportError();
+            return;
+        }
 
         // Thank you, Allan Odgaard!
         // (who wrote the following extraction alg.)
         fp = fopen([self.archivePath fileSystemRepresentation], "r");
-		if (!fp) goto reportError;
+        if (!fp) {
+            reportError();
+            return;
+        }
 
         oldDestinationString = getenv("DESTINATION");
         setenv("DESTINATION", [[self.archivePath stringByDeletingLastPathComponent] fileSystemRepresentation], 1);
         cmdFP = popen([command fileSystemRepresentation], "w");
         size_t written;
-		if (!cmdFP) goto reportError;
+        if (!cmdFP) {
+            reportError();
+            return;
+        }
 
         char buf[32 * 1024];
         size_t len;
@@ -132,32 +158,25 @@ static const CFStringRef SUTypeTarArchive = CFSTR("public.tar-archive");
 			if( written < len )
 			{
                 pclose(cmdFP);
-                goto reportError;
+                reportError();
+                return;
             }
 
             dispatch_async(dispatch_get_main_queue(), ^{
 				[self notifyDelegateOfExtractedLength:len];
             });
         }
+        
         pclose(cmdFP);
 
-        if (ferror(fp)) {
-            goto reportError;
+        if (ferror(fp))  {
+            reportError();
+            return;
         }
-
-        dispatch_async(dispatch_get_main_queue(), delegateSuccess);
-        goto finally;
-
-    reportError:
-        dispatch_async(dispatch_get_main_queue(), delegateFailure);
-
-    finally:
-        if (fp)
-            fclose(fp);
-        if (oldDestinationString)
-            setenv("DESTINATION", oldDestinationString, 1);
-        else
-            unsetenv("DESTINATION");
+        
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self notifyDelegateOfSuccess];
+        });
     }
 }
 

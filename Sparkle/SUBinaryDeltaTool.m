@@ -117,11 +117,14 @@ static BOOL shouldDeleteThenExtract(NSString * __unused key, NSDictionary* origi
 int main(int __unused argc, char __unused *argv[])
 {
     @autoreleasepool {
-        NSArray *args = [[NSProcessInfo processInfo] arguments];
-        if (args.count != 5) {
-        usage:
+        int(^usage)(void) = ^{
             fprintf(stderr, "Usage: BinaryDelta [create | apply] before-tree after-tree patch-file\n");
             return 1;
+        };
+        
+        NSArray *args = [[NSProcessInfo processInfo] arguments];
+        if (args.count != 5) {
+            return usage();
         }
 
         NSString *command = args[1];
@@ -147,7 +150,7 @@ int main(int __unused argc, char __unused *argv[])
             return result;
         }
         if (![command isEqualToString:@"create"]) {
-            goto usage;
+            return usage();
         }
 
         NSMutableDictionary *originalTreeState = [NSMutableDictionary dictionary];

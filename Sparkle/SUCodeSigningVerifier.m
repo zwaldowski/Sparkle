@@ -13,51 +13,72 @@
 
 @implementation SUCodeSigningVerifier
 
-+ (BOOL)codeSignatureIsValidAtPath:(NSString *)destinationPath error:(NSError *__autoreleasing *)error
++ (BOOL)codeSignatureIsValidAtPath:(NSString *)destinationPath error:(out NSError **)outError
 {
     OSStatus result;
-    SecRequirementRef requirement = NULL;
-    SecStaticCodeRef staticCode = NULL;
-    SecCodeRef hostCode = NULL;
-    NSBundle *newBundle;
-    CFErrorRef cfError = NULL;
-    if (error) {
-        *error = nil;
+    __block SecRequirementRef requirement = NULL;
+    __block SecStaticCodeRef staticCode = NULL;
+    __block SecCodeRef hostCode = NULL;
+    __block CFErrorRef error = NULL;
+    NSBundle *newBundle = nil;
+
+    if (outError) {
+        *outError = nil;
     }
+
+    BOOL(^cleanup)(void) = ^{
+        if (requirement) {
+            CFRelease(requirement);
+            requirement = NULL;
+        }
+        
+        if (staticCode) {
+            CFRelease(staticCode);
+            staticCode = NULL;
+        }
+        
+        if (hostCode) {
+            CFRelease(hostCode);
+            hostCode = NULL;
+        }
+
+        return NO;
+    };
 
     result = SecCodeCopySelf(kSecCSDefaultFlags, &hostCode);
     if (result != noErr) {
         SULog(@"Failed to copy host code %d", result);
-        goto finally;
+        return cleanup();
     }
 
     result = SecCodeCopyDesignatedRequirement(hostCode, kSecCSDefaultFlags, &requirement);
     if (result != noErr) {
         SULog(@"Failed to copy designated requirement. Code Signing OSStatus code: %d", result);
-        goto finally;
+        return cleanup();
     }
 
     newBundle = [NSBundle bundleWithPath:destinationPath];
     if (!newBundle) {
         SULog(@"Failed to load NSBundle for update");
         result = -1;
-        goto finally;
+        return cleanup();
     }
 
     result = SecStaticCodeCreateWithPath((__bridge CFURLRef)[newBundle executableURL], kSecCSDefaultFlags, &staticCode);
     if (result != noErr) {
         SULog(@"Failed to get static code %d", result);
-        goto finally;
+        return cleanup();
     }
 
-    result = SecStaticCodeCheckValidityWithErrors(staticCode, kSecCSDefaultFlags | kSecCSCheckAllArchitectures, requirement, &cfError);
-
-    if (cfError) {
-        NSError *tmpError = CFBridgingRelease(cfError);
-        if (error) *error = tmpError;
-    }
+    result = SecStaticCodeCheckValidityWithErrors(staticCode, kSecCSDefaultFlags | kSecCSCheckAllArchitectures, requirement, &error);
 
     if (result != noErr) {
+        if (outError) {
+            *outError = CFBridgingRelease(error);
+        } else {
+            CFRelease(error);
+        }
+        
         if (result == errSecCSUnsigned) {
             SULog(@"The host app is signed, but the new version of the app is not signed using Apple Code Signing. Please ensure that the new app is signed and that archiving did not corrupt the signature.");
         }
@@ -72,12 +93,10 @@
             [self logSigningInfoForCode:staticCode label:@"new info"];
         }
     }
-
-finally:
-    if (hostCode) CFRelease(hostCode);
-    if (staticCode) CFRelease(staticCode);
-    if (requirement) CFRelease(requirement);
-    return (result == noErr);
+    
+    cleanup();
+    
+    return YES;
 }
 
 static id valueOrNSNull(id value) {
