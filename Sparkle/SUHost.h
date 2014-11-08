@@ -17,9 +17,12 @@
 + (NSString *)systemVersionString;
 
 - (instancetype)initWithBundle:(NSBundle *)aBundle;
-@property (readonly, copy) NSString *bundlePath;
-@property (readonly, copy) NSString *appSupportPath;
-@property (readonly, copy) NSString *installationPath;
+@property (readonly, copy) NSString *bundlePath DEPRECATED_ATTRIBUTE;
+@property (readonly, copy) NSString *appSupportPath DEPRECATED_ATTRIBUTE;
+@property (readonly, copy) NSString *installationPath DEPRECATED_ATTRIBUTE;
+@property (readonly) NSURL *bundleURL;
+@property (readonly) NSURL *appSupportURL;
+@property (readonly) NSURL *installationURL;
 @property (readonly, copy) NSString *name;
 @property (readonly, copy) NSString *version;
 @property (readonly, copy) NSString *displayVersion;

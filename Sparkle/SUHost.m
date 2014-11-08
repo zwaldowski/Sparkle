@@ -59,7 +59,7 @@ typedef struct {
 }
 
 
-- (NSString *)description { return [NSString stringWithFormat:@"%@ <%@, %@>", [self class], [self bundlePath], [self installationPath]]; }
+- (NSString *)description { return [NSString stringWithFormat:@"%@ <%@, %@>", NSStringFromClass(self.class), self.bundleURL, self.installationURL]; }
 
 - (NSString *)bundlePath
 {
@@ -95,6 +95,46 @@ typedef struct {
     return [self.bundle bundlePath];
 }
 
+- (NSURL *)bundleURL
+{
+    return self.bundle.bundleURL;
+}
+
+- (NSURL *)appSupportURL
+{
+    NSFileManager *fm = NSFileManager.defaultManager;
+    NSURL *appSupportURL = [fm URLForDirectory:NSApplicationSupportDirectory inDomain:NSUserDomainMask appropriateForURL:nil create:YES error:NULL];
+    if (!appSupportURL)
+    {
+        appSupportURL = [[fm URLForDirectory:NSLibraryDirectory inDomain:NSUserDomainMask appropriateForURL:nil create:YES error:NULL] URLByAppendingPathComponent:@"Application Support" isDirectory:YES];
+        SULog(@"Failed to find app support directory! Using ~/Library/Application Support...");
+    }
+
+    if (!appSupportURL)
+    {
+        SULog(@"Failed to find app support directory! Using ~/Library/Application Support...");
+        appSupportURL = [NSURL fileURLWithPath:[@"~/Library/Application Support" stringByExpandingTildeInPath]];
+    }
+    
+    appSupportURL = [appSupportURL URLByAppendingPathComponent:self.name isDirectory:YES];
+    appSupportURL = [appSupportURL URLByAppendingPathComponent:@".Sparkle" isDirectory:YES];
+    return appSupportURL;
+}
+
+- (NSURL *)installationURL
+{
+    // We'll install to "#{CFBundleName}.app", but only if that path doesn't already exist. If we're "Foo 4.2.app," and there's a "Foo.app" in this directory, we don't want to overwrite it! But if there's no "Foo.app," we'll take that name.
+    if ([[[NSBundle bundleWithIdentifier:SUBundleIdentifier] infoDictionary][SUNormalizeInstalledApplicationNameKey] boolValue]) {
+        NSURL *bundleURL = self.bundle.bundleURL;
+        NSString *name = [self.bundle objectForInfoDictionaryKey:(__bridge id)kCFBundleNameKey];
+        NSURL *normalizedAppURL = [[bundleURL.URLByDeletingLastPathComponent URLByAppendingPathComponent:name isDirectory:YES] URLByAppendingPathExtension:bundleURL.pathExtension];
+        if (![normalizedAppURL checkResourceIsReachableAndReturnError:NULL]) {
+            return normalizedAppURL;
+        }
+    }
+    return self.bundleURL;
+}
+
 - (NSString *)name
 {
     NSString *name = [self.bundle objectForInfoDictionaryKey:@"CFBundleDisplayName"];
@@ -110,7 +150,7 @@ typedef struct {
 {
     NSString *version = [self.bundle objectForInfoDictionaryKey:(__bridge NSString *)kCFBundleVersionKey];
     if (!version || [version isEqualToString:@""])
-        [NSException raise:@"SUNoVersionException" format:@"This host (%@) has no %@! This attribute is required.", [self bundlePath], (__bridge NSString *)kCFBundleVersionKey];
+        [NSException raise:@"SUNoVersionException" format:@"This host (%@) has no %@! This attribute is required.", self.bundleURL, (__bridge NSString *)kCFBundleVersionKey];
     return version;
 }
 
