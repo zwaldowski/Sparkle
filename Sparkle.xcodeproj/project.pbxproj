@@ -167,6 +167,8 @@
 		61F83F720DBFE140006FDD30 /* SUBasicUpdateDriver.m in Sources */ = {isa = PBXBuildFile; fileRef = 61F83F700DBFE137006FDD30 /* SUBasicUpdateDriver.m */; };
 		61F83F740DBFE141006FDD30 /* SUBasicUpdateDriver.h in Headers */ = {isa = PBXBuildFile; fileRef = 61F83F6F0DBFE137006FDD30 /* SUBasicUpdateDriver.h */; settings = {ATTRIBUTES = (); }; };
 		61FA52880E2D9EA400EF58AD /* Sparkle.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8DC2EF5B0486A6940098B216 /* Sparkle.framework */; settings = {ATTRIBUTES = (Required, ); }; };
+		DB5D664A1A0DDD5E00892F43 /* NSURL+SUAdditions.h in Headers */ = {isa = PBXBuildFile; fileRef = DB5D66491A0DDD5E00892F43 /* NSURL+SUAdditions.h */; };
+		DB5D664C1A0DDD8D00892F43 /* NSURL+SUAdditions.m in Sources */ = {isa = PBXBuildFile; fileRef = DB5D664B1A0DDD8D00892F43 /* NSURL+SUAdditions.m */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -533,6 +535,8 @@
 		61F83F700DBFE137006FDD30 /* SUBasicUpdateDriver.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = SUBasicUpdateDriver.m; sourceTree = "<group>"; };
 		8DC2EF5A0486A6940098B216 /* Sparkle-Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = "Sparkle-Info.plist"; sourceTree = "<group>"; };
 		8DC2EF5B0486A6940098B216 /* Sparkle.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Sparkle.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		DB5D66491A0DDD5E00892F43 /* NSURL+SUAdditions.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = "NSURL+SUAdditions.h"; sourceTree = "<group>"; };
+		DB5D664B1A0DDD8D00892F43 /* NSURL+SUAdditions.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = "NSURL+SUAdditions.m"; sourceTree = "<group>"; };
 		FA1941CA0D94A70100DD942E /* ConfigFrameworkDebug.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; path = ConfigFrameworkDebug.xcconfig; sourceTree = "<group>"; };
 		FA1941CB0D94A70100DD942E /* ConfigTestAppDebug.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; path = ConfigTestAppDebug.xcconfig; sourceTree = "<group>"; };
 		FA1941CC0D94A70100DD942E /* ConfigCommonRelease.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; path = ConfigCommonRelease.xcconfig; sourceTree = "<group>"; };
@@ -876,6 +880,8 @@
 				61EF67550E25B58D00F754E0 /* SUHost.m */,
 				55C14F04136EF6DB00649790 /* SULog.h */,
 				55C14F05136EF6DB00649790 /* SULog.m */,
+				DB5D66491A0DDD5E00892F43 /* NSURL+SUAdditions.h */,
+				DB5D664B1A0DDD8D00892F43 /* NSURL+SUAdditions.m */,
 			);
 			includeInIndex = 1;
 			name = "Other Sources";
@@ -1005,6 +1011,7 @@
 				61299A8D09CA790200B7442F /* SUUnarchiver.h in Headers */,
 				6102FE5B0E08C7EC00F85D09 /* SUUnarchiver_Private.h in Headers */,
 				61B5FCDF09C52A9F00B25A18 /* SUUpdateAlert.h in Headers */,
+				DB5D664A1A0DDD5E00892F43 /* NSURL+SUAdditions.h in Headers */,
 				610134730DD250470049ACDF /* SUUpdateDriver.h in Headers */,
 				612DCBAF0D488BC60015DBEA /* SUUpdatePermissionPrompt.h in Headers */,
 				61B5F8ED09C4CE3C00B25A18 /* SUUpdater.h in Headers */,
@@ -1433,6 +1440,7 @@
 				61299A3009CA2DAB00B7442F /* SUDSAVerifier.m in Sources */,
 				61EF67560E25B58D00F754E0 /* SUHost.m in Sources */,
 				618FA5020DAE88B40026945C /* SUInstaller.m in Sources */,
+				DB5D664C1A0DDD8D00892F43 /* NSURL+SUAdditions.m in Sources */,
 				55C14F07136EF6DB00649790 /* SULog.m in Sources */,
 				618FA5230DAE8E8A0026945C /* SUPackageInstaller.m in Sources */,
 				61D85D6D0E10B2ED00F9B4A9 /* SUPipedUnarchiver.m in Sources */,
