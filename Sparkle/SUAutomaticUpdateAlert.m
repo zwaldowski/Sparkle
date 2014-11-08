@@ -35,7 +35,10 @@
     return self;
 }
 
-- (NSString *)description { return [NSString stringWithFormat:@"%@ <%@, %@>", [self class], [self.host bundlePath], [self.host installationPath]]; }
+- (NSString *)description
+{
+    return [NSString stringWithFormat:@"%@ <%@, %@>", NSStringFromClass(self.class), self.host.bundleURL, self.host.installationURL];
+}
 
 - (IBAction)installNow:(id)__unused sender
 {

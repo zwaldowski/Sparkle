@@ -58,8 +58,10 @@ typedef struct {
     return self;
 }
 
-
-- (NSString *)description { return [NSString stringWithFormat:@"%@ <%@, %@>", NSStringFromClass(self.class), self.bundleURL, self.installationURL]; }
+- (NSString *)description
+{
+    return [NSString stringWithFormat:@"%@ <%@, %@>", NSStringFromClass(self.class), self.bundleURL, self.installationURL];
+}
 
 - (NSString *)bundlePath
 {
